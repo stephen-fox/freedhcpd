@@ -4,7 +4,7 @@
    can't be assumed to be aligned. */
 
 /*
- * Copyright (c) 1995, 1996, 1998 The Internet Software Consortium.
+ * Copyright (c) 1995, 1996 The Internet Software Consortium.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -41,46 +41,41 @@
  * Enterprises, see ``http://www.vix.com''.
  */
 
-#ifndef lint
-static char copyright[] =
-"$Id: convert.c,v 1.5 1998/03/16 06:09:32 mellon Exp $ Copyright (c) 1995, 1996 The Internet Software Consortium.  All rights reserved.\n";
-#endif /* not lint */
-
 #include "dhcpd.h"
 
 u_int32_t getULong (buf)
 	unsigned char *buf;
 {
-	unsigned long ibuf;
+	u_int32_t ibuf;
 
-	memcpy (&ibuf, buf, sizeof (u_int32_t));
+	memcpy (&ibuf, buf, sizeof (ibuf));
 	return ntohl (ibuf);
 }
 
 int32_t getLong (buf)
 	unsigned char *buf;
 {
-	long ibuf;
+	int32_t ibuf;
 
-	memcpy (&ibuf, buf, sizeof (int32_t));
+	memcpy (&ibuf, buf, sizeof (ibuf));
 	return ntohl (ibuf);
 }
 
 u_int16_t getUShort (buf)
 	unsigned char *buf;
 {
-	unsigned short ibuf;
+	u_int16_t ibuf;
 
-	memcpy (&ibuf, buf, sizeof (u_int16_t));
+	memcpy (&ibuf, buf, sizeof (ibuf));
 	return ntohs (ibuf);
 }
 
 int16_t getShort (buf)
 	unsigned char *buf;
 {
-	short ibuf;
+	int16_t ibuf;
 
-	memcpy (&ibuf, buf, sizeof (int16_t));
+	memcpy (&ibuf, buf, sizeof (ibuf));
 	return ntohs (ibuf);
 }
 
@@ -102,7 +97,7 @@ void putLong (obuf, val)
 
 void putUShort (obuf, val)
 	unsigned char *obuf;
-	u_int32_t val;
+	unsigned int val;
 {
 	u_int16_t tmp = htons (val);
 	memcpy (obuf, &tmp, sizeof tmp);
@@ -110,7 +105,7 @@ void putUShort (obuf, val)
 
 void putShort (obuf, val)
 	unsigned char *obuf;
-	int32_t val;
+	int val;
 {
 	int16_t tmp = htons (val);
 	memcpy (obuf, &tmp, sizeof tmp);

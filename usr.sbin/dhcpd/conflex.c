@@ -3,8 +3,8 @@
    Lexical scanner for dhcpd config file... */
 
 /*
- * Copyright (c) 1995, 1996, 1997, 1998, 1999
- * The Internet Software Consortium.    All rights reserved.
+ * Copyright (c) 1995, 1996, 1997 The Internet Software Consortium.
+ * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -39,11 +39,6 @@
  * see ``http://www.vix.com/isc''.  To learn more about Vixie
  * Enterprises, see ``http://www.vix.com''.
  */
-
-#ifndef lint
-static char copyright[] =
-"$Id: conflex.c,v 1.37 1999/02/14 18:42:06 mellon Exp $ Copyright (c) 1995, 1996, 1997, 1998, 1999 The Internet Software Consortium.  All rights reserved.\n";
-#endif /* not lint */
 
 #include "dhcpd.h"
 #include "dhctoken.h"
@@ -104,14 +99,14 @@ static int get_char (cfile)
 				cur_line = line2;
 				prev_line = line1;
 			} else {
-				cur_line = line1;
-				prev_line = line2;
+				cur_line = line2;
+				prev_line = line1;
 			}
 			line++;
 			lpos = 1;
 			cur_line [0] = 0;
 		} else if (c != EOF) {
-			if (lpos <= 80) {
+			if (lpos <= 81) {
 				cur_line [lpos - 1] = c;
 				cur_line [lpos] = 0;
 			}
@@ -136,19 +131,10 @@ static int get_token (cfile)
 		u = ugflag;
 
 		c = get_char (cfile);
-#ifdef OLD_LEXER
-		if (c == '\n' && p == 1 && !u
-		    && comment_index < sizeof comments)
-			comments [comment_index++] = '\n';
-#endif
 
 		if (!(c == '\n' && eol_token) && isascii (c) && isspace (c))
 			continue;
 		if (c == '#') {
-#ifdef OLD_LEXER
-			if (comment_index < sizeof comments)
-				comments [comment_index++] = '#';
-#endif
 			skip_to_eol (cfile);
 			continue;
 		}
@@ -237,13 +223,8 @@ static void skip_to_eol (cfile)
 		c = get_char (cfile);
 		if (c == EOF)
 			return;
-#ifdef OLD_LEXER
-		if (comment_index < sizeof (comments))
-			comments [comment_index++] = c;
-#endif
-		if (c == EOL) {
+		if (c == EOL)
 			return;
-		}
 	} while (1);
 }
 
@@ -294,13 +275,6 @@ static int read_number (c, cfile)
 		c = get_char (cfile);
 		if (!seenx && c == 'x') {
 			seenx = 1;
-#ifndef OLD_LEXER
-		} else if (isascii (c) && !isxdigit (c) &&
-			   (c == '-' || c == '_' || isalpha (c))) {
-			token = NAME;
-		} else if (isascii (c) && !isdigit (c) && isxdigit (c)) {
-			token = NUMBER_OR_NAME;
-#endif
 		} else if (!isascii (c) || !isxdigit (c)) {
 			ungetc (c, cfile);
 			ugflag = 1;
@@ -354,8 +328,8 @@ static int intern (atom, dfv)
 
 	switch (tolower (atom [0])) {
 	      case 'a':
-		if (!strcasecmp (atom + 1, "nd"))
-			return AND;
+		if (!strcasecmp (atom + 1, "lways-reply-rfc1048"))
+			return ALWAYS_REPLY_RFC1048;
 		if (!strcasecmp (atom + 1, "ppend"))
 			return APPEND;
 		if (!strcasecmp (atom + 1, "llow"))
@@ -366,12 +340,6 @@ static int intern (atom, dfv)
 			return ABANDONED;
 		if (!strcasecmp (atom + 1, "uthoritative"))
 			return AUTHORITATIVE;
-		if (!strcasecmp (atom + 1, "dd"))
-			return ADD;
-		if (!strcasecmp (atom + 1, "uthenticated"))
-			return AUTHENTICATED;
-		if (!strcasecmp (atom + 1, "ll"))
-			return ALL;
 		break;
 	      case 'b':
 		if (!strcasecmp (atom + 1, "ackoff-cutoff"))
@@ -382,14 +350,7 @@ static int intern (atom, dfv)
 			return BOOTING;
 		if (!strcasecmp (atom + 1, "oot-unknown-clients"))
 			return BOOT_UNKNOWN_CLIENTS;
-		if (!strcasecmp (atom + 1, "reak"))
-			return BREAK;
-		if (!strcasecmp (atom + 1, "illing"))
-			return BILLING;
-		break;
 	      case 'c':
-		if (!strcasecmp (atom + 1, "heck"))
-			return CHECK;
 		if (!strcasecmp (atom + 1, "lass"))
 			return CLASS;
 		if (!strcasecmp (atom + 1, "iaddr"))
@@ -398,8 +359,6 @@ static int intern (atom, dfv)
 			return CLIENT_IDENTIFIER;
 		if (!strcasecmp (atom + 1, "lient-hostname"))
 			return CLIENT_HOSTNAME;
-		if (!strcasecmp (atom + 1, "ommunications-interrupted"))
-			return COMMUNICATIONS_INTERRUPTED;
 		break;
 	      case 'd':
 		if (!strcasecmp (atom + 1, "omain"))
@@ -413,40 +372,23 @@ static int intern (atom, dfv)
 				return DEFAULT_LEASE_TIME;
 			break;
 		}
-		if (!strncasecmp (atom + 1, "ynamic", 6)) {
-			if (!atom [7])
-				return DYNAMIC;
-			if (!strncasecmp (atom + 7, "-bootp", 6)) {
-				if (!atom [13])
-					return DYNAMIC_BOOTP;
-				if (!strcasecmp (atom + 13, "-lease-cutoff"))
-					return DYNAMIC_BOOTP_LEASE_CUTOFF;
-				if (!strcasecmp (atom + 13, "-lease-length"))
-					return DYNAMIC_BOOTP_LEASE_LENGTH;
-				break;
-			}
+		if (!strncasecmp (atom + 1, "ynamic-bootp", 12)) {
+			if (!atom [13])
+				return DYNAMIC_BOOTP;
+			if (!strcasecmp (atom + 13, "-lease-cutoff"))
+				return DYNAMIC_BOOTP_LEASE_CUTOFF;
+			if (!strcasecmp (atom + 13, "-lease-length"))
+				return DYNAMIC_BOOTP_LEASE_LENGTH;
+			break;
 		}
 		break;
 	      case 'e':
-		if (isascii (atom [1]) && tolower (atom [1]) == 'x') {
-			if (!strcasecmp (atom + 2, "tract-int"))
-				return EXTRACT_INT;
-			if (!strcasecmp (atom + 2, "ists"))
-				return EXISTS;
-		}
 		if (!strcasecmp (atom + 1, "thernet"))
 			return ETHERNET;
 		if (!strcasecmp (atom + 1, "nds"))
 			return ENDS;
 		if (!strcasecmp (atom + 1, "xpire"))
 			return EXPIRE;
-		if (!strncasecmp (atom + 1, "ls", 2)) {
-			if (!strcasecmp (atom + 3, "e"))
-				return ELSE;
-			if (!strcasecmp (atom + 3, "if"))
-				return ELSIF;
-			break;
-		}
 		break;
 	      case 'f':
 		if (!strcasecmp (atom + 1, "ilename"))
@@ -477,37 +419,14 @@ static int intern (atom, dfv)
 			return INITIAL_INTERVAL;
 		if (!strcasecmp (atom + 1, "nterface"))
 			return INTERFACE;
-		if (!strcasecmp (atom + 1, "dentifier"))
-			return IDENTIFIER;
-		if (!strcasecmp (atom + 1, "f"))
-			return IF;
-		break;
-	      case 'k':
-		if (!strcasecmp (atom + 1, "nown"))
-			return KNOWN;
 		break;
 	      case 'l':
 		if (!strcasecmp (atom + 1, "ease"))
 			return LEASE;
-		if (!strcasecmp (atom + 1, "imit"))
-			return LIMIT;
 		break;
 	      case 'm':
-		if (!strncasecmp (atom + 1, "ax-", 3)) {
-			if (!strcasecmp (atom + 4, "lease-time"))
-				return MAX_LEASE_TIME;
-			if (!strcasecmp (atom + 4, "transmit-idle"))
-				return MAX_TRANSMIT_IDLE;
-			if (!strcasecmp (atom + 4, "response-delay"))
-				return MAX_RESPONSE_DELAY;
-		}
-		if (!strncasecmp (atom + 1, "in-", 3)) {
-			if (!strcasecmp (atom + 4, "lease-time"))
-				return MIN_LEASE_TIME;
-			if (!strcasecmp (atom + 4, "secs"))
-				return MIN_SECS;
-			break;
-		}
+		if (!strcasecmp (atom + 1, "ax-lease-time"))
+			return MAX_LEASE_TIME;
 		if (!strncasecmp (atom + 1, "edi", 3)) {
 			if (!strcasecmp (atom + 4, "a"))
 				return MEDIA;
@@ -515,18 +434,8 @@ static int intern (atom, dfv)
 				return MEDIUM;
 			break;
 		}
-		if (!strcasecmp (atom + 1, "atch"))
-			return MATCH;
-		if (!strcasecmp (atom + 1, "embers"))
-			return MEMBERS;
-		if (!strcasecmp (atom + 1, "y"))
-			return MY;
 		break;
 	      case 'n':
-		if (!strcasecmp (atom + 1, "ot"))
-			return NOT;
-		if (!strcasecmp (atom + 1, "ormal"))
-			return NORMAL;
 		if (!strcasecmp (atom + 1, "ameserver"))
 			return NAMESERVER;
 		if (!strcasecmp (atom + 1, "etmask"))
@@ -537,48 +446,22 @@ static int intern (atom, dfv)
 			return TOKEN_NOT;
 		break;
 	      case 'o':
-		if (!strcasecmp (atom + 1, "r"))
-			return OR;
 		if (!strcasecmp (atom + 1, "ption"))
 			return OPTION;
 		if (!strcasecmp (atom + 1, "ne-lease-per-client"))
 			return ONE_LEASE_PER_CLIENT;
-		if (!strcasecmp (atom + 1, "f"))
-			return OF;
 		break;
 	      case 'p':
 		if (!strcasecmp (atom + 1, "repend"))
 			return PREPEND;
 		if (!strcasecmp (atom + 1, "acket"))
 			return PACKET;
-		if (!strcasecmp (atom + 1, "ool"))
-			return POOL;
-		if (!strcasecmp (atom + 1, "seudo"))
-			return PSEUDO;
-		if (!strcasecmp (atom + 1, "eer"))
-			return PEER;
-		if (!strcasecmp (atom + 1, "rimary"))
-			return PRIMARY;
-		if (!strncasecmp (atom + 1, "artner", 6)) {
-			if (!atom [7])
-				return PARTNER;
-			if (!strcasecmp (atom + 7, "-down"))
-				return PARTNER_DOWN;
-		}
-		if (!strcasecmp (atom + 1, "ort"))
-			return PORT;
-		if (!strcasecmp (atom + 1, "otential-conflict"))
-			return POTENTIAL_CONFLICT;
 		break;
 	      case 'r':
 		if (!strcasecmp (atom + 1, "ange"))
 			return RANGE;
-		if (!strcasecmp (atom + 1, "ecover"))
-			return RECOVER;
 		if (!strcasecmp (atom + 1, "equest"))
 			return REQUEST;
-		if (!strcasecmp (atom + 1, "equire"))
-			return REQUIRE;
 		if (!strcasecmp (atom + 1, "equire"))
 			return REQUIRE;
 		if (!strcasecmp (atom + 1, "etry"))
@@ -593,18 +476,16 @@ static int intern (atom, dfv)
 			return REJECT;
 		break;
 	      case 's':
-		if (!strcasecmp (atom + 1, "uffix"))
-			return SUFFIX;
 		if (!strcasecmp (atom + 1, "earch"))
 			return SEARCH;
 		if (!strcasecmp (atom + 1, "tarts"))
 			return STARTS;
 		if (!strcasecmp (atom + 1, "iaddr"))
 			return SIADDR;
+		if (!strcasecmp (atom + 1, "ubnet"))
+			return SUBNET;
 		if (!strcasecmp (atom + 1, "hared-network"))
 			return SHARED_NETWORK;
-		if (!strcasecmp (atom + 1, "econdary"))
-			return SECONDARY;
 		if (!strcasecmp (atom + 1, "erver-name"))
 			return SERVER_NAME;
 		if (!strcasecmp (atom + 1, "erver-identifier"))
@@ -617,17 +498,6 @@ static int intern (atom, dfv)
 			return SCRIPT;
 		if (!strcasecmp (atom + 1, "upersede"))
 			return SUPERSEDE;
-		if (!strncasecmp (atom + 1, "ub", 2)) {
-			if (!strcasecmp (atom + 3, "string"))
-				return SUBSTRING;
-			if (!strcasecmp (atom + 3, "net"))
-				return SUBNET;
-			if (!strcasecmp (atom + 3, "class"))
-				return SUBCLASS;
-			break;
-		}
-		if (!strcasecmp (atom + 1, "pawn"))
-			return SPAWN;
 		break;
 	      case 't':
 		if (!strcasecmp (atom + 1, "imestamp"))
@@ -638,8 +508,6 @@ static int intern (atom, dfv)
 			return TOKEN_RING;
 		break;
 	      case 'u':
-		if (!strcasecmp (atom + 1, "id"))
-			return UID;
 		if (!strncasecmp (atom + 1, "se", 2)) {
 			if (!strcasecmp (atom + 3, "r-class"))
 				return USER_CLASS;
@@ -650,23 +518,14 @@ static int intern (atom, dfv)
 				return USE_LEASE_ADDR_FOR_DEFAULT_ROUTE;
 			break;
 		}
-		if (!strncasecmp (atom + 1, "nknown", 6)) {
-			if (!strcasecmp (atom + 7, "-clients"))
-				return UNKNOWN_CLIENTS;
-			if (!atom [7])
-				return UNKNOWN;
-			break;
-		}
-		if (!strcasecmp (atom + 1, "nauthenticated"))
-			return AUTHENTICATED;
+		if (!strcasecmp (atom + 1, "id"))
+			return UID;
+		if (!strcasecmp (atom + 1, "nknown-clients"))
+			return UNKNOWN_CLIENTS;
 		break;
 	      case 'v':
 		if (!strcasecmp (atom + 1, "endor-class"))
 			return VENDOR_CLASS;
-		break;
-	      case 'w':
-		if (!strcasecmp (atom + 1, "ith"))
-			return WITH;
 		break;
 	      case 'y':
 		if (!strcasecmp (atom + 1, "iaddr"))

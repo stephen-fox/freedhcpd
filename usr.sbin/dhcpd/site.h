@@ -26,21 +26,11 @@
 
 /* #define DEBUG_PACKET */
 
-/* Define this if you want to see dumps of expression evaluation. */
+/* Define this if you want to see dumps of tree evaluations.   The most
+   common reason for doing this is to watch what happens with DNS name
+   lookups. */
 
-/* #define DEBUG_EXPRESSIONS */
-
-/* Define this if you want to see dumps of find_lease() in action. */
-
-/* #define DEBUG_FIND_LEASE */
-
-/* Define this if you want to see dumps of parsed expressions. */
-
-/* #define DEBUG_EXPRESSION_PARSE */
-
-/* Define this if you want to watch the class matching process. */
-
-/* #define DEBUG_CLASS_MATCHING */
+/* #define DEBUG_EVAL */
 
 /* Define this if you want the dhcpd.pid file to go somewhere other than
    the default (which varies from system to system, but is usually either
@@ -108,8 +98,3 @@
 /* Define this to change the logging facility used by dhcpd. */
 
 /* #define DHCPD_LOG_FACILITY LOG_DAEMON */
-
-/* Define this to support the failover protocol.   This probably won't work
-   right now. */
-
-/* #define FAILOVER_PROTOCOL */

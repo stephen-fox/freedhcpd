@@ -40,11 +40,6 @@
  * Enterprises, see ``http://www.vix.com''.
  */
 
-#ifndef lint
-static char copyright[] =
-"$Id: db.c,v 1.20 1998/11/11 08:00:11 mellon Exp $ Copyright (c) 1995, 1996 The Internet Software Consortium.  All rights reserved.\n";
-#endif /* not lint */
-
 #include "dhcpd.h"
 
 FILE *db_file;
@@ -71,11 +66,8 @@ int write_lease (lease)
 		++errors;
 	}
 
-	/* Note: the following is not a Y2K bug - it's a Y1.9K bug.   Until
-	   somebody invents a time machine, I think we can safely disregard
-	   it. */
 	t = gmtime (&lease -> starts);
-	sprintf (tbuf, "%d %d/%02d/%02d %02d:%02d:%02d;",
+	snprintf (tbuf, sizeof tbuf, "%d %d/%02d/%02d %02d:%02d:%02d;",
 		 t -> tm_wday, t -> tm_year + 1900,
 		 t -> tm_mon + 1, t -> tm_mday,
 		 t -> tm_hour, t -> tm_min, t -> tm_sec);
@@ -86,7 +78,7 @@ int write_lease (lease)
 	}
 
 	t = gmtime (&lease -> ends);
-	sprintf (tbuf, "%d %d/%02d/%02d %02d:%02d:%02d;",
+	snprintf (tbuf, sizeof tbuf,"%d %d/%02d/%02d %02d:%02d:%02d;",
 		 t -> tm_wday, t -> tm_year + 1900,
 		 t -> tm_mon + 1, t -> tm_mday,
 		 t -> tm_hour, t -> tm_min, t -> tm_sec);
@@ -95,12 +87,6 @@ int write_lease (lease)
 	if (errno) {
 		++errors;
 	}
-
-	/* If this lease is billed to a class and is still valid,
-	   write it out. */
-	if (lease -> billing_class && lease -> ends > cur_time)
-		if (!write_billing_class (lease -> billing_class))
-			++errors;
 
 	if (lease -> hardware_addr.hlen) {
 		errno = 0;
@@ -181,60 +167,6 @@ int write_lease (lease)
 	return !errors;
 }
 
-/* Write a spawned class to the database file. */
-
-int write_billing_class (class)
-	struct class *class;
-{
-	int errors = 0;
-	int i;
-
-	if (!class -> superclass) {
-		errno = 0;
-		fprintf (db_file, "\n\tbilling class \"%s\";", class -> name);
-		return !errno;
-	}
-
-	errno = 0;
-	fprintf (db_file, "\n\tbilling subclass \"%s\"",
-		 class -> superclass -> name);
-	if (errno)
-		++errors;
-
-	for (i = 0; i < class -> hash_string.len; i++)
-		if (!isascii (class -> hash_string.data [i]) ||
-		    !isprint (class -> hash_string.data [i]))
-			break;
-	if (i == class -> hash_string.len) {
-		errno = 0;
-		fprintf (db_file, " \"%*.*s\";",
-			 class -> hash_string.len,
-			 class -> hash_string.len,
-			 class -> hash_string.data);
-		if (errno)
-			++errors;
-	} else {
-		errno = 0;
-		fprintf (db_file, " %2.2x", class -> hash_string.data [0]);
-		if (errno)
-			++errors;
-		for (i = 1; i < class -> hash_string.len; i++) {
-			errno = 0;
-			fprintf (db_file, ":%2.2x",
-				 class -> hash_string.data [i]);
-			if (errno)
-				++errors;
-		}
-		errno = 0;
-		fprintf (db_file, ";");
-		if (errno)
-			++errors;
-	}
-
-	class -> dirty = 0;
-	return !errors;
-}
-
 /* Commit any leases that have been written out... */
 
 int commit_leases ()
@@ -246,7 +178,7 @@ int commit_leases ()
 		note ("commit_leases: unable to commit: %m");
 		return 0;
 	}
-	if (fsync (fileno (db_file)) < 0) {
+	if (fsync (fileno (db_file)) == -1) {
 		note ("commit_leases: unable to commit: %m");
 		return 0;
 	}
@@ -273,8 +205,8 @@ void db_startup ()
 
 void new_lease_file ()
 {
-	char newfname [512];
-	char backfname [512];
+	char newfname [MAXPATHLEN];
+	char backfname [MAXPATHLEN];
 	TIME t;
 	int db_fd;
 
@@ -285,30 +217,37 @@ void new_lease_file ()
 
 	/* Make a temporary lease file... */
 	GET_TIME (&t);
-	sprintf (newfname, "%s.%d", path_dhcpd_db, (int)t);
+	snprintf (newfname, sizeof newfname,"%s.%d", path_dhcpd_db, (int)t);
 	db_fd = open (newfname, O_WRONLY | O_TRUNC | O_CREAT, 0664);
-	if (db_fd < 0) {
+	if (db_fd == -1) {
 		error ("Can't create new lease file: %m");
 	}
 	if ((db_file = fdopen (db_fd, "w")) == NULL) {
 		error ("Can't fdopen new lease file!");
 	}
 
+	/* Write an introduction so people don't complain about time
+	   being off. */
+	fprintf (db_file, "# All times in this file are in UTC (GMT), not %s",
+		 "your local timezone.\n");
+	fprintf (db_file, "# The format of this file is documented in the %s",
+		 "dhcpd.leases(5) manual page.\n\n");
+
 	/* Write out all the leases that we know of... */
 	counting = 0;
 	write_leases ();
 
 	/* Get the old database out of the way... */
-	sprintf (backfname, "%s~", path_dhcpd_db);
-	if (unlink (backfname) < 0 && errno != ENOENT)
+	snprintf (backfname, sizeof backfname, "%s~", path_dhcpd_db);
+	if (unlink (backfname) == -1 && errno != ENOENT)
 		error ("Can't remove old lease database backup %s: %m",
 		       backfname);
-	if (link (path_dhcpd_db, backfname) < 0)
+	if (link (path_dhcpd_db, backfname) == -1)
 		error ("Can't backup lease database %s to %s: %m",
 		       path_dhcpd_db, backfname);
 	
 	/* Move in the new file... */
-	if (rename (newfname, path_dhcpd_db) < 0)
+	if (rename (newfname, path_dhcpd_db) == -1)
 		error ("Can't install new lease database %s to %s: %m",
 		       newfname, path_dhcpd_db);
 

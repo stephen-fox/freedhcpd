@@ -1,4 +1,4 @@
-/* dhcp.c
+/* icmp.c
 
    ICMP Protocol engine - for sending out pings and receiving
    responses. */
@@ -41,14 +41,10 @@
  * Enterprises, see ``http://www.vix.com''.
  */
 
-#ifndef lint
-static char copyright[] =
-"$Id: icmp.c,v 1.11 1998/06/25 22:54:13 mellon Exp $ Copyright (c) 1997, 1998 The Internet Software Consortium.  All rights reserved.\n";
-#endif /* not lint */
-
 #include "dhcpd.h"
-#include "netinet/ip.h"
-#include "netinet/ip_icmp.h"
+#include <netinet/in_systm.h>
+#include <netinet/ip.h>
+#include <netinet/ip_icmp.h>
 
 static int icmp_protocol_initialized;
 static int icmp_protocol_fd;
@@ -61,8 +57,6 @@ void icmp_startup (routep, handler)
 {
 	struct protoent *proto;
 	int protocol = 1;
-	struct sockaddr_in from;
-	int fd;
 	int state;
 
 	/* Only initialize icmp once. */
@@ -86,8 +80,8 @@ void icmp_startup (routep, handler)
 			(char *)&state, sizeof state) < 0)
 		error ("Unable to disable SO_DONTROUTE on ICMP socket: %m");
 
-	add_protocol ("icmp", icmp_protocol_fd,
-		      icmp_echoreply, (void *)handler);
+	add_protocol ("icmp", icmp_protocol_fd, icmp_echoreply,
+		      (void *)handler);
 }
 
 int icmp_echorequest (addr)
@@ -100,9 +94,8 @@ int icmp_echorequest (addr)
 	if (!icmp_protocol_initialized)
 		error ("attempt to use ICMP protocol before initialization.");
 
-#ifdef HAVE_SA_LEN
+	memset(&to, 0, sizeof to);
 	to.sin_len = sizeof to;
-#endif
 	to.sin_family = AF_INET;
 	to.sin_port = 0; /* unused. */
 	memcpy (&to.sin_addr, addr -> iabuf, sizeof to.sin_addr); /* XXX */
@@ -117,7 +110,6 @@ int icmp_echorequest (addr)
 #else
 	icmp.icmp_id = (u_int32_t)addr;
 #endif
-	memset (&icmp.icmp_dun, 0, sizeof icmp.icmp_dun);
 
 	icmp.icmp_cksum = wrapsum (checksum ((unsigned char *)&icmp,
 					     sizeof icmp, 0));
@@ -137,33 +129,28 @@ void icmp_echoreply (protocol)
 	struct protocol *protocol;
 {
 	struct icmp *icfrom;
-	struct ip *ip;
 	struct sockaddr_in from;
-	unsigned char icbuf [1500];
-	int status;
-	int len, hlen;
+	u_int8_t icbuf [1500];
+	int status, len;
+	socklen_t salen;
 	struct iaddr ia;
 	void (*handler) PROTO ((struct iaddr, u_int8_t *, int));
 
-	len = sizeof from;
+	salen = sizeof from;
 	status = recvfrom (protocol -> fd, (char *)icbuf, sizeof icbuf, 0,
-			  (struct sockaddr *)&from, &len);
+			  (struct sockaddr *)&from, &salen);
 	if (status < 0) {
 		warn ("icmp_echoreply: %m");
 		return;
 	}
 
-	/* Find the IP header length... */
-	ip = (struct ip *)icbuf;
-	hlen = ip -> ip_hl << 2;
-
-	/* Short packet? */
-	if (status < hlen + (sizeof *icfrom)) {
+	/* Probably not for us. */
+	if (status < (sizeof (struct ip)) + (sizeof *icfrom)) {
 		return;
 	}
 
-	len = status - hlen;
-	icfrom = (struct icmp *)(icbuf + hlen);
+	len = status - sizeof (struct ip);
+	icfrom = (struct icmp *)(icbuf + sizeof (struct ip));
 
 	/* Silently discard ICMP packets that aren't echoreplies. */
 	if (icfrom -> icmp_type != ICMP_ECHOREPLY) {
@@ -172,7 +159,8 @@ void icmp_echoreply (protocol)
 
 	/* If we were given a second-stage handler, call it. */
 	if (protocol -> local) {
-		handler = ((void (*) PROTO ((struct iaddr, u_int8_t *, int)))
+		handler = ((void (*) PROTO ((struct iaddr,
+					    u_int8_t *, int)))
 			   protocol -> local);
 		memcpy (ia.iabuf, &from.sin_addr, sizeof from.sin_addr);
 		ia.len = sizeof from.sin_addr;

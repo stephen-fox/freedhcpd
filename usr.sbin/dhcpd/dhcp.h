@@ -3,7 +3,7 @@
    Protocol structures... */
 
 /*
- * Copyright (c) 1995, 1996, 1999 The Internet Software Consortium.
+ * Copyright (c) 1995, 1996 The Internet Software Consortium.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -155,7 +155,6 @@ struct dhcp_packet {
 #define DHO_DHCP_CLASS_IDENTIFIER	60
 #define DHO_DHCP_CLIENT_IDENTIFIER	61
 #define DHO_DHCP_USER_CLASS_ID		77
-#define DHO_DHCP_AGENT_OPTIONS		82
 #define DHO_END				255
 
 /* DHCP message types. */
@@ -167,8 +166,3 @@ struct dhcp_packet {
 #define DHCPNAK		6
 #define DHCPRELEASE	7
 #define DHCPINFORM	8
-
-/* Relay Agent Information option subtypes: */
-#define RAI_CIRCUIT_ID	1
-#define RAI_REMOTE_ID	2
-#define RAI_AGENT_ID	3

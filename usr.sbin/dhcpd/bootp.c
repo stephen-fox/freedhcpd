@@ -3,8 +3,8 @@
    BOOTP Protocol support. */
 
 /*
- * Copyright (c) 1995, 1996, 1997, 1998, 1999
- * The Internet Software Consortium.   All rights reserved.
+ * Copyright (c) 1995, 1996, 1998, 1999 The Internet Software Consortium.
+ * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -40,11 +40,6 @@
  * Enterprises, see ``http://www.vix.com''.
  */
 
-#ifndef lint
-static char copyright[] =
-"$Id: bootp.c,v 1.37 1999/02/14 19:40:22 mellon Exp $ Copyright (c) 1995, 1996, 1997, 1998, 1999 The Internet Software Consortium.  All rights reserved.\n";
-#endif /* not lint */
-
 #include "dhcpd.h"
 
 void bootp (packet)
@@ -58,32 +53,28 @@ void bootp (packet)
 	struct sockaddr_in to;
 	struct in_addr from;
 	struct hardware hto;
-	struct option_state options;
+	struct tree_cache *options [256];
 	struct subnet *subnet;
 	struct lease *lease;
 	struct iaddr ip_address;
 	int i;
-	struct data_string d1;
-	struct option_cache *oc;
-	char msgbuf [1024];
 
 	if (packet -> raw -> op != BOOTREQUEST)
 		return;
 
-	sprintf (msgbuf, "BOOTREQUEST from %s via %s",
-		 print_hw_addr (packet -> raw -> htype,
-				packet -> raw -> hlen,
-				packet -> raw -> chaddr),
-		 packet -> raw -> giaddr.s_addr
-		 ? inet_ntoa (packet -> raw -> giaddr)
-		 : packet -> interface -> name);
+	note ("BOOTREQUEST from %s via %s%s",
+	      print_hw_addr (packet -> raw -> htype,
+			     packet -> raw -> hlen,
+			     packet -> raw -> chaddr),
+	      packet -> raw -> giaddr.s_addr
+	      ? inet_ntoa (packet -> raw -> giaddr)
+	      : packet -> interface -> name,
+	      packet -> options_valid ? "" : " (non-rfc1048)");
 
 
 
-	if (!locate_network (packet)) {
-		note ("%s: network unknown", msgbuf);
+	if (!locate_network (packet))
 		return;
-	}
 
 	hp = find_hosts_by_haddr (packet -> raw -> htype,
 				  packet -> raw -> chaddr,
@@ -113,54 +104,123 @@ void bootp (packet)
 			}
 		}
 
-		/* If a lease has already been assigned to this client,
-		   use it. */
-		if (lease) {
-			ack_lease (packet, lease, 0, 0, msgbuf);
+		if (host && (!host -> group -> allow_booting)) {
+			note ("Ignoring excluded BOOTP client %s",
+			      host -> name
+			      ? host -> name
+			      : print_hw_addr (packet -> raw -> htype,
+					       packet -> raw -> hlen,
+					       packet -> raw -> chaddr));
+			return;
+		}
+			
+		if (host && (!host -> group -> allow_bootp)) {
+			note ("Ignoring BOOTP request from client %s",
+			      host -> name
+			      ? host -> name
+			      : print_hw_addr (packet -> raw -> htype,
+					       packet -> raw -> hlen,
+					       packet -> raw -> chaddr));
+			return;
+		}
+			
+		/* If we've been told not to boot unknown clients,
+		   and we didn't find any host record for this client,
+		   ignore it. */
+		if (!host && !(packet -> shared_network ->
+			       group -> boot_unknown_clients)) {
+			note ("Ignoring unknown BOOTP client %s via %s",
+			      print_hw_addr (packet -> raw -> htype,
+					     packet -> raw -> hlen,
+					     packet -> raw -> chaddr),
+			      packet -> raw -> giaddr.s_addr
+			      ? inet_ntoa (packet -> raw -> giaddr)
+			      : packet -> interface -> name);
 			return;
 		}
 
-		/* Otherwise, try to allocate one. */
-		lease = allocate_lease (packet,
-					packet -> shared_network -> pools, 0);
-		if (lease) {
-			lease -> host = host;
-			ack_lease (packet, lease, 0, 0, msgbuf);
+		/* If we've been told not to boot with bootp on this
+		   network, ignore it. */
+		if (!host &&
+		    !(packet -> shared_network -> group -> allow_bootp)) {
+			note ("Ignoring BOOTP request from client %s via %s",
+			      print_hw_addr (packet -> raw -> htype,
+					     packet -> raw -> hlen,
+					     packet -> raw -> chaddr),
+			      packet -> raw -> giaddr.s_addr
+			      ? inet_ntoa (packet -> raw -> giaddr)
+			      : packet -> interface -> name);
 			return;
 		}
-		note ("%s: no available leases", msgbuf);
-		return;
+
+		/* If the packet is from a host we don't know and there
+		   are no dynamic bootp addresses on the network it came
+		   in on, drop it on the floor. */
+		if (!(packet -> shared_network -> group -> dynamic_bootp)) {
+		      lose:
+			note ("No applicable record for BOOTP host %s via %s",
+			      print_hw_addr (packet -> raw -> htype,
+					     packet -> raw -> hlen,
+					     packet -> raw -> chaddr),
+			      packet -> raw -> giaddr.s_addr
+			      ? inet_ntoa (packet -> raw -> giaddr)
+			      : packet -> interface -> name);
+			return;
+		}
+
+		/* If a lease has already been assigned to this client
+		   and it's still okay to use dynamic bootp on
+		   that lease, reassign it. */
+		if (lease) {
+			/* If this lease can be used for dynamic bootp,
+			   do so. */
+			if ((lease -> flags & DYNAMIC_BOOTP_OK)) {
+
+				/* If it's not a DYNAMIC_BOOTP lease,
+				   release it before reassigning it
+				   so that we don't get a lease
+				   conflict. */
+				if (!(lease -> flags & BOOTP_LEASE))
+					release_lease (lease);
+
+				lease -> host = host;
+				ack_lease (packet, lease, 0, 0);
+				return;
+			}
+
+			 /* If dynamic BOOTP is no longer allowed for
+			   this lease, set it free. */
+			release_lease (lease);
+		}
+
+		/* If there are dynamic bootp addresses that might be
+		   available, try to snag one. */
+		for (lease = packet -> shared_network -> last_lease;
+		     lease && lease -> ends <= cur_time;
+		     lease = lease -> prev) {
+			if ((lease -> flags & DYNAMIC_BOOTP_OK)) {
+				lease -> host = host;
+				ack_lease (packet, lease, 0, 0);
+				return;
+			}
+		}
+		goto lose;
 	}
 
-	/* Run the executable statements to compute the client and server
-	   options. */
-
-	memset (&options, 0, sizeof options);
-	
-	/* Execute the subnet statements. */
-	execute_statements_in_scope (packet, &options, &options,
-				     lease -> subnet -> group,
-				     (struct group *)0);
-	
-	/* Execute the host statements. */
-	execute_statements_in_scope (packet, &options, &options, hp -> group,
-				     lease -> subnet -> group);
-	
-	/* Drop the request if it's not allowed for this client. */
-	if (evaluate_boolean_option_cache (packet, &options,
-					   lookup_option (options.dhcp_hash,
-							  SV_ALLOW_BOOTP))) {
-		note ("%s: bootp disallowed", msgbuf);
-		return;
-	} 
-
-	if (evaluate_boolean_option_cache (packet, &options,
-					   lookup_option (options.dhcp_hash,
-							  SV_ALLOW_BOOTING))) {
-		note ("%s: booting disallowed", msgbuf);
+	/* Make sure we're allowed to boot this client. */
+	if (hp && (!hp -> group -> allow_booting)) {
+		note ("Ignoring excluded BOOTP client %s",
+		      hp -> name);
 		return;
 	}
-
+			
+	/* Make sure we're allowed to boot this client with bootp. */
+	if (hp && (!hp -> group -> allow_bootp)) {
+		note ("Ignoring BOOTP request from client %s",
+		      hp -> name);
+		return;
+	}
+			
 	/* Set up the outgoing packet... */
 	memset (&outgoing, 0, sizeof outgoing);
 	memset (&raw, 0, sizeof raw);
@@ -168,19 +228,46 @@ void bootp (packet)
 
 	/* If we didn't get a known vendor magic number on the way in,
 	   just copy the input options to the output. */
-	if (!packet -> options_valid) {
+	if (!packet -> options_valid &&
+	    !subnet -> group -> always_reply_rfc1048 &&
+	    (!hp || !hp -> group -> always_reply_rfc1048)) {
 		memcpy (outgoing.raw -> options,
 			packet -> raw -> options, DHCP_OPTION_LEN);
 		outgoing.packet_length = BOOTP_MIN_LEN;
 	} else {
+		struct tree_cache netmask_tree;   /*  -- RBF */
+
+		/* Come up with a list of options that we want to send
+		   to this client.  Start with the per-subnet options,
+		   and then override those with client-specific
+		   options. */
+
+		memcpy (options, subnet -> group -> options, sizeof options);
+
+		for (i = 0; i < 256; i++) {
+			if (hp -> group -> options [i])
+				options [i] = hp -> group -> options [i];
+		}
+
+		/* Use the subnet mask from the subnet declaration if no other
+		   mask has been provided. */
+		if (!options [DHO_SUBNET_MASK]) {
+			options [DHO_SUBNET_MASK] = &netmask_tree;
+			netmask_tree.flags = TC_TEMPORARY;
+			netmask_tree.value = lease -> subnet -> netmask.iabuf;
+			netmask_tree.len = lease -> subnet -> netmask.len;
+			netmask_tree.buf_size = lease -> subnet -> netmask.len;
+			netmask_tree.timeout = 0xFFFFFFFF;
+			netmask_tree.tree = (struct tree *)0;
+		}
+
 		/* Pack the options into the buffer.  Unlike DHCP, we
 		   can't pack options into the filename and server
 		   name buffers. */
 
 		outgoing.packet_length =
-			cons_options (packet, outgoing.raw, 0,
-				      &options, (struct agent_options *)0,
-				      0, 0, 1);
+			cons_options (packet, outgoing.raw,
+				      0, options, 0, 0, 1, (u_int8_t *)0, 0);
 		if (outgoing.packet_length < BOOTP_MIN_LEN)
 			outgoing.packet_length = BOOTP_MIN_LEN;
 	}
@@ -193,48 +280,36 @@ void bootp (packet)
 	raw.hops = packet -> raw -> hops;
 	raw.xid = packet -> raw -> xid;
 	raw.secs = packet -> raw -> secs;
-	raw.flags = 0;
+	raw.flags = packet -> raw -> flags;
 	raw.ciaddr = packet -> raw -> ciaddr;
 	memcpy (&raw.yiaddr, ip_address.iabuf, sizeof raw.yiaddr);
 
 	/* Figure out the address of the next server. */
-	raw.siaddr = (lease -> subnet -> shared_network ->
-		      interface -> primary_address);
-	oc = lookup_option (options.dhcp_hash, SV_NEXT_SERVER);
-	if (oc &&
-	    evaluate_option_cache (&d1, packet, &options, oc)) {
-		/* If there was more than one answer, take the first. */
-		if (d1.len >= 4 && d1.data)
-			memcpy (&raw.siaddr, d1.data, 4);
-		data_string_forget (&d1, "bootrequest");
-	}
+	if (hp  && hp -> group -> next_server.len)
+		memcpy (&raw.siaddr, hp -> group -> next_server.iabuf, 4);
+	else if (subnet -> group -> next_server.len)
+		memcpy (&raw.siaddr, subnet -> group -> next_server.iabuf, 4);
+	else if (subnet -> interface_address.len)
+		memcpy (&raw.siaddr, subnet -> interface_address.iabuf, 4);
+	else
+		raw.siaddr = packet -> interface -> primary_address;
 
 	raw.giaddr = packet -> raw -> giaddr;
+	if (hp -> group -> server_name)
+		strncpy (raw.sname, hp -> group -> server_name,
+			 (sizeof raw.sname));
+	else if (subnet -> group -> server_name)
+		strncpy (raw.sname, subnet -> group -> server_name,
+			 (sizeof raw.sname));
 
-	/* Figure out the filename. */
-	oc = lookup_option (options.dhcp_hash, SV_FILENAME);
-	if (oc &&
-	    evaluate_option_cache (&d1, packet, &options, oc)) {
-		memcpy (raw.file, d1.data,
-			d1.len > sizeof raw.file ? sizeof raw.file : d1.len);
-		if (sizeof raw.file > d1.len)
-			memset (&raw.file [d1.len],
-				0, (sizeof raw.file) - d1.len);
-		data_string_forget (&d1, "bootrequest");
-	} else
+	if (hp -> group -> filename)
+		strncpy (raw.file, hp -> group -> filename,
+			 (sizeof raw.file));
+	else if (subnet -> group -> filename)
+		strncpy (raw.file, subnet -> group -> filename,
+			 (sizeof raw.file));
+	else
 		memcpy (raw.file, packet -> raw -> file, sizeof raw.file);
-
-	/* Choose a server name as above. */
-	oc = lookup_option (options.dhcp_hash, SV_SERVER_NAME);
-	if (oc &&
-	    evaluate_option_cache (&d1, packet, &options, oc)) {
-		memcpy (raw.sname, d1.data,
-			d1.len > sizeof raw.sname ? sizeof raw.sname : d1.len);
-		if (sizeof raw.sname > d1.len)
-			memset (&raw.sname [d1.len],
-				0, (sizeof raw.sname) - d1.len);
-		data_string_forget (&d1, "bootrequest");
-	}
 
 	/* Set up the hardware destination address... */
 	hto.htype = packet -> raw -> htype;
@@ -244,7 +319,6 @@ void bootp (packet)
 	from = packet -> interface -> primary_address;
 
 	/* Report what we're doing... */
-	note ("%s", msgbuf);
 	note ("BOOTREPLY for %s to %s (%s) via %s",
 	      piaddr (ip_address), hp -> name,
 	      print_hw_addr (packet -> raw -> htype,
@@ -255,11 +329,11 @@ void bootp (packet)
 	      : packet -> interface -> name);
 
 	/* Set up the parts of the address that are in common. */
+	memset (&to, 0, sizeof to);
 	to.sin_family = AF_INET;
 #ifdef HAVE_SA_LEN
 	to.sin_len = sizeof to;
 #endif
-	memset (to.sin_zero, 0, sizeof to.sin_zero);
 
 	/* If this was gatewayed, send it back to the gateway... */
 	if (raw.giaddr.s_addr) {
@@ -271,10 +345,17 @@ void bootp (packet)
 					      (struct packet *)0,
 					      &raw, outgoing.packet_length,
 					      from, &to, &hto);
-			if (result < 0)
-				warn ("send_packet: %m");
 			return;
 		}
+
+	/* If it comes from a client that already knows its address
+	   and is not requesting a broadcast response, and we can
+	   unicast to a client without using the ARP protocol, sent it
+	   directly to that client. */
+	} else if (!(raw.flags & htons (BOOTP_BROADCAST))) {
+		to.sin_addr = raw.yiaddr;
+		to.sin_port = remote_port;
+
 	/* Otherwise, broadcast it on the local network. */
 	} else {
 		to.sin_addr.s_addr = INADDR_BROADCAST;
@@ -285,6 +366,4 @@ void bootp (packet)
 	result = send_packet (packet -> interface,
 			      packet, &raw, outgoing.packet_length,
 			      from, &to, &hto);
-	if (result < 0)
-		warn ("send_packet: %m");
 }

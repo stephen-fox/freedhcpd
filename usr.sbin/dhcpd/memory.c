@@ -3,8 +3,8 @@
    Memory-resident database... */
 
 /*
- * Copyright (c) 1995, 1996, 1997, 1998, 1999
- * The Internet Software Consortium.   All rights reserved.
+ * Copyright (c) 1995, 1996, 1997, 1998 The Internet Software Consortium.
+ * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -40,11 +40,6 @@
  * Enterprises, see ``http://www.vix.com''.
  */
 
-#ifndef lint
-static char copyright[] =
-"$Id: memory.c,v 1.45 1999/02/14 18:49:45 mellon Exp $ Copyright (c) 1995, 1996, 1997, 1998, 1999 The Internet Software Consortium.  All rights reserved.\n";
-#endif /* not lint */
-
 #include "dhcpd.h"
 
 static struct subnet *subnets;
@@ -56,12 +51,14 @@ static struct hash_table *lease_ip_addr_hash;
 static struct hash_table *lease_hw_addr_hash;
 static struct lease *dangling_leases;
 
+static struct hash_table *vendor_class_hash;
+static struct hash_table *user_class_hash;
+
 void enter_host (hd)
 	struct host_decl *hd;
 {
 	struct host_decl *hp = (struct host_decl *)0;
 	struct host_decl *np = (struct host_decl *)0;
-	struct executable_statement *esp;
 
 	hd -> n_ipaddr = (struct host_decl *)0;
 
@@ -91,38 +88,23 @@ void enter_host (hd)
 		np -> n_ipaddr = hd;
 	}
 
-	/* See if there's a statement that sets the client identifier.
-	   This is a kludge - the client identifier really shouldn't be
-	   set with an executable statement. */
-	for (esp = hd -> group -> statements; esp; esp = esp -> next) {
-		if (esp -> op == supersede_option_statement &&
-		    esp -> data.option &&
-		    (esp -> data.option -> option -> universe ==
-		     &dhcp_universe) &&
-		    (esp -> data.option -> option -> code ==
-		     DHO_DHCP_CLIENT_IDENTIFIER)) {
-			evaluate_option_cache
-				(&hd -> client_identifier,
-				 (struct packet *)0,
-				 (struct option_state *)0,
-				 esp -> data.option);
-			break;
-		}
-	}
-
-	/* If we got a client identifier, hash this entry by
-	   client identifier. */
-	if (hd -> client_identifier.len) {
+	if (hd -> group -> options [DHO_DHCP_CLIENT_IDENTIFIER]) {
+		if (!tree_evaluate (hd -> group -> options
+				    [DHO_DHCP_CLIENT_IDENTIFIER]))
+			return;
+			
 		/* If there's no uid hash, make one; otherwise, see if
 		   there's already an entry in the hash for this host. */
 		if (!host_uid_hash) {
 			host_uid_hash = new_hash ();
 			hp = (struct host_decl *)0;
 		} else
-			hp = ((struct host_decl *)
-			      hash_lookup (host_uid_hash,
-					   hd -> client_identifier.data,
-					   hd -> client_identifier.len));
+			hp = (struct host_decl *) hash_lookup
+				(host_uid_hash,
+				 hd -> group -> options
+				 [DHO_DHCP_CLIENT_IDENTIFIER] -> value,
+				 hd -> group -> options
+				 [DHO_DHCP_CLIENT_IDENTIFIER] -> len);
 
 		/* If there's already a host declaration for this
 		   client identifier, add this one to the end of the
@@ -137,8 +119,10 @@ void enter_host (hd)
 			}
 		} else {
 			add_hash (host_uid_hash,
-				  hd -> client_identifier.data,
-				  hd -> client_identifier.len,
+				  hd -> group -> options
+				  [DHO_DHCP_CLIENT_IDENTIFIER] -> value,
+				  hd -> group -> options
+				  [DHO_DHCP_CLIENT_IDENTIFIER] -> len,
 				  (unsigned char *)hd);
 		}
 	}
@@ -183,47 +167,41 @@ struct subnet *find_host_for_network (host, addr, share)
 	struct subnet *subnet;
 	struct iaddr ip_address;
 	struct host_decl *hp;
-	struct data_string fixed_addr;
 
 	for (hp = *host; hp; hp = hp -> n_ipaddr) {
-		if (!hp -> fixed_addr)
+		if (!hp -> fixed_addr || !tree_evaluate (hp -> fixed_addr))
 			continue;
-		if (!evaluate_data_expression (&fixed_addr, (struct packet *)0,
-					       (struct option_state *)0,
-					       hp -> fixed_addr -> expression))
-			continue;
-		for (i = 0; i < fixed_addr.len; i += 4) {
+		for (i = 0; i < hp -> fixed_addr -> len; i += 4) {
 			ip_address.len = 4;
 			memcpy (ip_address.iabuf,
-				fixed_addr.data + i, 4);
+				hp -> fixed_addr -> value + i, 4);
 			subnet = find_grouped_subnet (share, ip_address);
 			if (subnet) {
 				*addr = ip_address;
 				*host = hp;
-				data_string_forget (&fixed_addr,
-						    "find_host_for_network");
 				return subnet;
 			}
 		}
-		data_string_forget (&fixed_addr, "find_host_for_network");
 	}
 	return (struct subnet *)0;
 }
 
-void new_address_range (low, high, subnet, pool)
+void new_address_range (low, high, subnet, dynamic)
 	struct iaddr low, high;
 	struct subnet *subnet;
-	struct pool *pool;
+	int dynamic;
 {
 	struct lease *address_range, *lp, *plp;
 	struct iaddr net;
 	int min, max, i;
 	char lowbuf [16], highbuf [16], netbuf [16];
 	struct shared_network *share = subnet -> shared_network;
+	struct hostent *h;
+	struct in_addr ia;
 
 	/* All subnets should have attached shared network structures. */
 	if (!share) {
-		strcpy (netbuf, piaddr (subnet -> net));
+		strlcpy (netbuf, piaddr (subnet -> net), sizeof(netbuf));
 		error ("No shared network for network %s (%s)",
 		       netbuf, piaddr (subnet -> netmask));
 	}
@@ -239,18 +217,18 @@ void new_address_range (low, high, subnet, pool)
 	/* Make sure that high and low addresses are in same subnet. */
 	net = subnet_number (low, subnet -> netmask);
 	if (!addr_eq (net, subnet_number (high, subnet -> netmask))) {
-		strcpy (lowbuf, piaddr (low));
-		strcpy (highbuf, piaddr (high));
-		strcpy (netbuf, piaddr (subnet -> netmask));
+		strlcpy (lowbuf, piaddr (low), sizeof(lowbuf));
+		strlcpy (highbuf, piaddr (high), sizeof(highbuf));
+		strlcpy (netbuf, piaddr (subnet -> netmask), sizeof(netbuf));
 		error ("Address range %s to %s, netmask %s spans %s!",
 		       lowbuf, highbuf, netbuf, "multiple subnets");
 	}
 
 	/* Make sure that the addresses are on the correct subnet. */
 	if (!addr_eq (net, subnet -> net)) {
-		strcpy (lowbuf, piaddr (low));
-		strcpy (highbuf, piaddr (high));
-		strcpy (netbuf, piaddr (subnet -> netmask));
+		strlcpy (lowbuf, piaddr (low), sizeof(lowbuf));
+		strlcpy (highbuf, piaddr (high), sizeof(highbuf));
+		strlcpy (netbuf, piaddr (subnet -> netmask), sizeof(netbuf));
 		error ("Address range %s to %s not on net %s/%s!",
 		       lowbuf, highbuf, piaddr (subnet -> net), netbuf);
 	}
@@ -268,15 +246,15 @@ void new_address_range (low, high, subnet, pool)
 	/* Get a lease structure for each address in the range. */
 	address_range = new_leases (max - min + 1, "new_address_range");
 	if (!address_range) {
-		strcpy (lowbuf, piaddr (low));
-		strcpy (highbuf, piaddr (high));
+		strlcpy (lowbuf, piaddr (low), sizeof(lowbuf));
+		strlcpy (highbuf, piaddr (high), sizeof(highbuf));
 		error ("No memory for address range %s-%s.", lowbuf, highbuf);
 	}
 	memset (address_range, 0, (sizeof *address_range) * (max - min + 1));
 
 	/* Fill in the last lease if it hasn't been already... */
-	if (!pool -> last_lease) {
-		pool -> last_lease = &address_range [0];
+	if (!share -> last_lease) {
+		share -> last_lease = &address_range [0];
 	}
 
 	/* Fill out the lease structures with some minimal information. */
@@ -287,16 +265,33 @@ void new_address_range (low, high, subnet, pool)
 			address_range [i].timestamp = MIN_TIME;
 		address_range [i].ends = MIN_TIME;
 		address_range [i].subnet = subnet;
-		address_range [i].pool = pool;
-		address_range [i].billing_class = (struct class *)0;
-		address_range [i].flags = 0;
+		address_range [i].shared_network = share;
+		address_range [i].flags = dynamic ? DYNAMIC_BOOTP_OK : 0;
+
+		memcpy (&ia, address_range [i].ip_addr.iabuf, 4);
+
+		if (subnet -> group -> get_lease_hostnames) {
+			h = gethostbyaddr ((char *)&ia, sizeof ia, AF_INET);
+			if (!h)
+				warn ("No hostname for %s", inet_ntoa (ia));
+			else {
+				int len = strlen(h->h_name) + 1;
+				address_range [i].hostname =
+					malloc (len);
+				if (!address_range [i].hostname)
+					error ("no memory for hostname %s.",
+					       h -> h_name);
+				strlcpy (address_range [i].hostname,
+					h -> h_name, len);
+			}
+		}
 
 		/* Link this entry into the list. */
-		address_range [i].next = pool -> leases;
+		address_range [i].next = share -> leases;
 		address_range [i].prev = (struct lease *)0;
-		pool -> leases = &address_range [i];
+		share -> leases = &address_range [i];
 		if (address_range [i].next)
-			address_range [i].next -> prev = pool -> leases;
+			address_range [i].next -> prev = share -> leases;
 		add_hash (lease_ip_addr_hash,
 			  address_range [i].ip_addr.iabuf,
 			  address_range [i].ip_addr.len,
@@ -376,7 +371,7 @@ int subnet_inner_than (subnet, scan, warnp)
 			if (scan -> netmask.iabuf [3 - (j >> 3)] &
 			    (1 << (j & 7)))
 				break;
-		strcpy (n1buf, piaddr (subnet -> net));
+		strlcpy (n1buf, piaddr (subnet -> net), sizeof(n1buf));
 		if (warnp)
 			warn ("%ssubnet %s/%d conflicts with subnet %s/%d",
 			      "Warning: ", n1buf, 32 - i,
@@ -388,6 +383,7 @@ int subnet_inner_than (subnet, scan, warnp)
 }
 
 /* Enter a new subnet into the subnet list. */
+
 void enter_subnet (subnet)
 	struct subnet *subnet;
 {
@@ -497,147 +493,143 @@ int supersede_lease (comp, lease, commit)
 		warn ("Lease conflict at %s",
 		      piaddr (comp -> ip_addr));
 		return 0;
-	}
+	} else {
+		/* If there's a Unique ID, dissociate it from the hash
+		   table and free it if necessary. */
+		if (comp -> uid) {
+			uid_hash_delete (comp);
+			enter_uid = 1;
+			if (comp -> uid != &comp -> uid_buf [0]) {
+				free (comp -> uid);
+				comp -> uid_max = 0;
+				comp -> uid_len = 0;
+			}
+			comp -> uid = (unsigned char *)0;
+		} else
+			enter_uid = 1;
 
-	/* If there's a Unique ID, dissociate it from the hash
-	   table and free it if necessary. */
-	if (comp -> uid) {
-		uid_hash_delete (comp);
-		enter_uid = 1;
-		if (comp -> uid != &comp -> uid_buf [0]) {
-			free (comp -> uid);
+		if (comp -> hardware_addr.htype &&
+		    ((comp -> hardware_addr.hlen !=
+		      lease -> hardware_addr.hlen) ||
+		     (comp -> hardware_addr.htype !=
+		      lease -> hardware_addr.htype) ||
+		     memcmp (comp -> hardware_addr.haddr,
+			     lease -> hardware_addr.haddr,
+			     comp -> hardware_addr.hlen))) {
+			hw_hash_delete (comp);
+			enter_hwaddr = 1;
+		} else if (!comp -> hardware_addr.htype)
+			enter_hwaddr = 1;
+
+		/* Copy the data files, but not the linkages. */
+		comp -> starts = lease -> starts;
+		if (lease -> uid) {
+			if (lease -> uid_len < sizeof (lease -> uid_buf)) {
+				memcpy (comp -> uid_buf,
+					lease -> uid, lease -> uid_len);
+				comp -> uid = &comp -> uid_buf [0];
+				comp -> uid_max = sizeof comp -> uid_buf;
+			} else if (lease -> uid != &lease -> uid_buf [0]) {
+				comp -> uid = lease -> uid;
+				comp -> uid_max = lease -> uid_max;
+				lease -> uid = (unsigned char *)0;
+				lease -> uid_max = 0;
+			} else {
+				error ("corrupt lease uid."); /* XXX */
+			}
+		} else {
+			comp -> uid = (unsigned char *)0;
 			comp -> uid_max = 0;
-			comp -> uid_len = 0;
 		}
-		comp -> uid = (unsigned char *)0;
-	} else
-		enter_uid = 1;
-	
-	if (comp -> hardware_addr.htype &&
-	    ((comp -> hardware_addr.hlen !=
-	      lease -> hardware_addr.hlen) ||
-	     (comp -> hardware_addr.htype !=
-	      lease -> hardware_addr.htype) ||
-	     memcmp (comp -> hardware_addr.haddr,
-		     lease -> hardware_addr.haddr,
-		     comp -> hardware_addr.hlen))) {
-		hw_hash_delete (comp);
-		enter_hwaddr = 1;
-	} else if (!comp -> hardware_addr.htype)
-		enter_hwaddr = 1;
-	
-	/* If the lease has been billed to a class, remove the billing. */
-	if (comp -> billing_class &&
-	    comp -> billing_class != lease -> billing_class)
-		unbill_class (comp, comp -> billing_class);
+		comp -> uid_len = lease -> uid_len;
+		comp -> host = lease -> host;
+		comp -> hardware_addr = lease -> hardware_addr;
+		comp -> flags = ((lease -> flags & ~PERSISTENT_FLAGS) |
+				 (comp -> flags & ~EPHEMERAL_FLAGS));
 
-	/* Copy the data files, but not the linkages. */
-	comp -> starts = lease -> starts;
-	comp -> timestamp = lease -> timestamp;
-	if (lease -> uid) {
-		if (lease -> uid_len < sizeof (lease -> uid_buf)) {
-			memcpy (comp -> uid_buf,
-				lease -> uid, lease -> uid_len);
-			comp -> uid = &comp -> uid_buf [0];
-			comp -> uid_max = sizeof comp -> uid_buf;
-		} else if (lease -> uid != &lease -> uid_buf [0]) {
-			comp -> uid = lease -> uid;
-			comp -> uid_max = lease -> uid_max;
-			lease -> uid = (unsigned char *)0;
-			lease -> uid_max = 0;
+		/* Record the lease in the uid hash if necessary. */
+		if (enter_uid && lease -> uid) {
+			uid_hash_add (comp);
+		}
+
+		/* Record it in the hardware address hash if necessary. */
+		if (enter_hwaddr && lease -> hardware_addr.htype) {
+			hw_hash_add (comp);
+		}
+
+		/* Remove the lease from its current place in the 
+		   timeout sequence. */
+		if (comp -> prev) {
+			comp -> prev -> next = comp -> next;
 		} else {
-			error ("corrupt lease uid."); /* XXX */
+			comp -> shared_network -> leases = comp -> next;
 		}
-	} else {
-		comp -> uid = (unsigned char *)0;
-		comp -> uid_max = 0;
-	}
-	comp -> uid_len = lease -> uid_len;
-	comp -> host = lease -> host;
-	comp -> hardware_addr = lease -> hardware_addr;
-	comp -> flags = ((lease -> flags & ~PERSISTENT_FLAGS) |
-			 (comp -> flags & ~EPHEMERAL_FLAGS));
-	
-	/* Record the lease in the uid hash if necessary. */
-	if (enter_uid && lease -> uid) {
-		uid_hash_add (comp);
-	}
-	
-	/* Record it in the hardware address hash if necessary. */
-	if (enter_hwaddr && lease -> hardware_addr.htype) {
-		hw_hash_add (comp);
-	}
-	
-	/* Remove the lease from its current place in the 
-	   timeout sequence. */
-	if (comp -> prev) {
-		comp -> prev -> next = comp -> next;
-	} else {
-		comp -> pool -> leases = comp -> next;
-	}
-	if (comp -> next) {
-		comp -> next -> prev = comp -> prev;
-	}
-	if (comp -> pool -> last_lease == comp) {
-		comp -> pool -> last_lease = comp -> prev;
-	}
-	
-	/* Find the last insertion point... */
-	if (comp == comp -> pool -> insertion_point ||
-	    !comp -> pool -> insertion_point) {
-		lp = comp -> pool -> leases;
-	} else {
-		lp = comp -> pool -> insertion_point;
-	}
-	
-	if (!lp) {
-		/* Nothing on the list yet?    Just make comp the
-		   head of the list. */
-		comp -> pool -> leases = comp;
-		comp -> pool -> last_lease = comp;
-	} else if (lp -> ends > lease -> ends) {
-		/* Skip down the list until we run out of list
-		   or find a place for comp. */
-		while (lp -> next && lp -> ends > lease -> ends) {
-			lp = lp -> next;
+		if (comp -> next) {
+			comp -> next -> prev = comp -> prev;
 		}
-		if (lp -> ends > lease -> ends) {
-			/* If we ran out of list, put comp at the end. */
-			lp -> next = comp;
-			comp -> prev = lp;
-			comp -> next = (struct lease *)0;
-			comp -> pool -> last_lease = comp;
+		if (comp -> shared_network -> last_lease == comp) {
+			comp -> shared_network -> last_lease = comp -> prev;
+		}
+
+		/* Find the last insertion point... */
+		if (comp == comp -> shared_network -> insertion_point ||
+		    !comp -> shared_network -> insertion_point) {
+			lp = comp -> shared_network -> leases;
 		} else {
-			/* If we didn't, put it between lp and
-			   the previous item on the list. */
-			if ((comp -> prev = lp -> prev))
-				comp -> prev -> next = comp;
-			comp -> next = lp;
-			lp -> prev = comp;
+			lp = comp -> shared_network -> insertion_point;
 		}
-	} else {
-		/* Skip up the list until we run out of list
-		   or find a place for comp. */
-		while (lp -> prev && lp -> ends < lease -> ends) {
-			lp = lp -> prev;
-		}
-		if (lp -> ends < lease -> ends) {
-			/* If we ran out of list, put comp at the beginning. */
-			lp -> prev = comp;
-			comp -> next = lp;
-			comp -> prev = (struct lease *)0;
-			comp -> pool -> leases = comp;
+
+		if (!lp) {
+			/* Nothing on the list yet?    Just make comp the
+			   head of the list. */
+			comp -> shared_network -> leases = comp;
+			comp -> shared_network -> last_lease = comp;
+		} else if (lp -> ends > lease -> ends) {
+			/* Skip down the list until we run out of list
+			   or find a place for comp. */
+			while (lp -> next && lp -> ends > lease -> ends) {
+				lp = lp -> next;
+			}
+			if (lp -> ends > lease -> ends) {
+				/* If we ran out of list, put comp
+				   at the end. */
+				lp -> next = comp;
+				comp -> prev = lp;
+				comp -> next = (struct lease *)0;
+				comp -> shared_network -> last_lease = comp;
+			} else {
+				/* If we didn't, put it between lp and
+				   the previous item on the list. */
+				if ((comp -> prev = lp -> prev))
+					comp -> prev -> next = comp;
+				comp -> next = lp;
+				lp -> prev = comp;
+			}
 		} else {
-			/* If we didn't, put it between lp and
-			   the next item on the list. */
-			if ((comp -> next = lp -> next))
-				comp -> next -> prev = comp;
-			comp -> prev = lp;
-			lp -> next = comp;
+			/* Skip up the list until we run out of list
+			   or find a place for comp. */
+			while (lp -> prev && lp -> ends < lease -> ends) {
+				lp = lp -> prev;
+			}
+			if (lp -> ends < lease -> ends) {
+				/* If we ran out of list, put comp
+				   at the beginning. */
+				lp -> prev = comp;
+				comp -> next = lp;
+				comp -> prev = (struct lease *)0;
+				comp -> shared_network -> leases = comp;
+			} else {
+				/* If we didn't, put it between lp and
+				   the next item on the list. */
+				if ((comp -> next = lp -> next))
+					comp -> next -> prev = comp;
+				comp -> prev = lp;
+				lp -> next = comp;
+			}
 		}
+		comp -> shared_network -> insertion_point = comp;
+		comp -> ends = lease -> ends;
 	}
-	comp -> pool -> insertion_point = comp;
-	comp -> ends = lease -> ends;
 
 	/* Return zero if we didn't commit the lease to permanent storage;
 	   nonzero if we did. */
@@ -654,49 +646,34 @@ void release_lease (lease)
 	lt = *lease;
 	if (lt.ends > cur_time) {
 		lt.ends = cur_time;
-		lt.billing_class = (struct class *)0;
 		supersede_lease (lease, &lt, 1);
+		note ("Released lease for IP address %s",
+		      piaddr (lease -> ip_addr));
 	}
 }
 
-/* Abandon the specified lease (set its timeout to infinity and its
-   particulars to zero, and re-hash it as appropriate. */
+
+/* Abandon the specified lease for the specified time. sets it's 
+   particulars to zero, the end time apropriately and re-hash it as
+   appropriate. abandons permanently if abtime is 0 */
 
 void abandon_lease (lease, message)
 	struct lease *lease;
 	char *message;
 {
 	struct lease lt;
+	TIME abtime;
 
+	abtime = lease -> subnet -> group -> default_lease_time;
 	lease -> flags |= ABANDONED_LEASE;
 	lt = *lease;
-	lt.ends = cur_time; /* XXX */
-	warn ("Abandoning IP address %s: %s",
-	      piaddr (lease -> ip_addr), message);
+	lt.ends = cur_time + abtime;
+	warn ("Abandoning IP address %s for %d seconds: %s",
+	      piaddr (lease -> ip_addr), abtime, message);
 	lt.hardware_addr.htype = 0;
 	lt.hardware_addr.hlen = 0;
 	lt.uid = (unsigned char *)0;
 	lt.uid_len = 0;
-	lt.billing_class = (struct class *)0;
-	supersede_lease (lease, &lt, 1);
-}
-
-/* Abandon the specified lease (set its timeout to infinity and its
-   particulars to zero, and re-hash it as appropriate. */
-
-void dissociate_lease (lease)
-	struct lease *lease;
-{
-	struct lease lt;
-
-	lt = *lease;
-	if (lt.ends > cur_time)
-		lt.ends = cur_time;
-	lt.hardware_addr.htype = 0;
-	lt.hardware_addr.hlen = 0;
-	lt.uid = (unsigned char *)0;
-	lt.uid_len = 0;
-	lt.billing_class = (struct class *)0;
 	supersede_lease (lease, &lt, 1);
 }
 
@@ -865,6 +842,49 @@ void hw_hash_delete (lease)
 	lease -> n_hw = (struct lease *)0;
 }
 
+
+struct class *add_class (type, name)
+	int type;
+	char *name;
+{
+	struct class *class = new_class ("add_class");
+	char *tname = (char *)malloc (strlen (name) + 1);
+
+	if (!vendor_class_hash)
+		vendor_class_hash = new_hash ();
+	if (!user_class_hash)
+		user_class_hash = new_hash ();
+
+	if (!tname || !class || !vendor_class_hash || !user_class_hash)
+		return (struct class *)0;
+
+	memset (class, 0, sizeof *class);
+	strlcpy (tname, name, strlen(name) + 1);
+	class -> name = tname;
+
+	if (type)
+		add_hash (user_class_hash,
+			  (unsigned char *)tname, strlen (tname),
+			  (unsigned char *)class);
+	else
+		add_hash (vendor_class_hash,
+			  (unsigned char *)tname, strlen (tname),
+			  (unsigned char *)class);
+	return class;
+}
+
+struct class *find_class (type, name, len)
+	int type;
+	unsigned char *name;
+	int len;
+{
+	struct class *class =
+		(struct class *)hash_lookup (type
+					     ? user_class_hash
+					     : vendor_class_hash, name, len);
+	return class;
+}	
+
 struct group *clone_group (group, caller)
 	struct group *group;
 	char *caller;
@@ -873,8 +893,6 @@ struct group *clone_group (group, caller)
 	if (!g)
 		error ("%s: can't allocate new group", caller);
 	*g = *group;
-	g -> statements = (struct executable_statement *)0;
-	g -> next = group;
 	return g;
 }
 
@@ -884,18 +902,14 @@ void write_leases ()
 {
 	struct lease *l;
 	struct shared_network *s;
-	struct pool *p;
 
 	for (s = shared_networks; s; s = s -> next) {
-		for (p = s -> pools; p; p = p -> next) {
-			for (l = p -> leases; l; l = l -> next) {
-				if (l -> hardware_addr.hlen ||
-				    l -> uid_len ||
-				    (l -> flags & ABANDONED_LEASE))
-					if (!write_lease (l))
-						error ("Can't rewrite %s",
-						       "lease database");
-			}
+		for (l = s -> leases; l; l = l -> next) {
+			if (l -> hardware_addr.hlen ||
+			    l -> uid_len ||
+			    (l -> flags & ABANDONED_LEASE))
+				if (!write_lease (l))
+					error ("Can't rewrite lease database");
 		}
 	}
 	if (!commit_leases ())
@@ -907,7 +921,6 @@ void dump_subnets ()
 	struct lease *l;
 	struct shared_network *s;
 	struct subnet *n;
-	struct pool *p;
 
 	note ("Subnets:");
 	for (n = subnets; n; n = n -> next_subnet) {
@@ -918,12 +931,12 @@ void dump_subnets ()
 	note ("Shared networks:");
 	for (s = shared_networks; s; s = s -> next) {
 		note ("  %s", s -> name);
-		for (p = s -> pools; p; p = p -> next) {
-			for (l = p -> leases; l; l = l -> next) {
-				print_lease (l);
-			}
-			debug ("Last Lease:");
-			print_lease (p -> last_lease);
+		for (l = s -> leases; l; l = l -> next) {
+			print_lease (l);
+		}
+		if (s -> last_lease) {
+			debug ("    Last Lease:");
+			print_lease (s -> last_lease);
 		}
 	}
 }

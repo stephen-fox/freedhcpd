@@ -3,7 +3,7 @@
    Definitions for hashing... */
 
 /*
- * Copyright (c) 1995, 1998 The Internet Software Consortium.
+ * Copyright (c) 1995, 1996 The Internet Software Consortium.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -54,8 +54,3 @@ struct hash_table {
 	struct hash_bucket *buckets [DEFAULT_HASH_SIZE];
 };
 
-struct named_hash {
-	struct named_hash *next;
-	char *name;
-	struct hash_table *hash;
-};

@@ -3,7 +3,7 @@
    Routines for manipulating hash tables... */
 
 /*
- * Copyright (c) 1995, 1996 The Internet Software Consortium.
+ * Copyright (c) 1995, 1996, 1997, 1998 The Internet Software Consortium.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -40,14 +40,9 @@
  * Enterprises, see ``http://www.vix.com''.
  */
 
-#ifndef lint
-static char copyright[] =
-"$Id: hash.c,v 1.10 1998/03/16 06:11:51 mellon Exp $ Copyright (c) 1995, 1996 The Internet Software Consortium.  All rights reserved.\n";
-#endif /* not lint */
-
 #include "dhcpd.h"
 
-static INLINE int do_hash PROTO ((unsigned char *, int, int));
+static int do_hash PROTO ((unsigned char *, int, int));
 
 struct hash_table *new_hash ()
 {
@@ -59,31 +54,20 @@ struct hash_table *new_hash ()
 	return rv;
 }
 
-static INLINE int do_hash (name, len, size)
+static int do_hash (name, len, size)
 	unsigned char *name;
 	int len;
 	int size;
 {
 	register int accum = 0;
-	register unsigned char *s = (unsigned char *)name;
+	register unsigned char *s = name;
 	int i = len;
-	if (i) {
-		while (i--) {
-			/* Add the character in... */
-			accum += *s++;
-			/* Add carry back in... */
-			while (accum > 255) {
-				accum = (accum & 255) + (accum >> 8);
-			}
-		}
-	} else {
-		while (*s) {
-			/* Add the character in... */
-			accum += *s++;
-			/* Add carry back in... */
-			while (accum > 255) {
-				accum = (accum & 255) + (accum >> 8);
-			}
+	while (i--) {
+		/* Add the character in... */
+		accum += *s++;
+		/* Add carry back in... */
+		while (accum > 255) {
+			accum = (accum & 255) + (accum >> 8);
 		}
 	}
 	return accum % size;
@@ -100,6 +84,8 @@ void add_hash (table, name, len, pointer)
 
 	if (!table)
 		return;
+	if (!len)
+		len = strlen ((char *)name);
 
 	hashno = do_hash (name, len, table -> hash_count);
 	bp = new_hash_bucket ("add_hash");
@@ -125,6 +111,8 @@ void delete_hash_entry (table, name, len)
 
 	if (!table)
 		return;
+	if (!len)
+		len = strlen ((char *)name);
 
 	hashno = do_hash (name, len, table -> hash_count);
 
@@ -157,20 +145,15 @@ unsigned char *hash_lookup (table, name, len)
 
 	if (!table)
 		return (unsigned char *)0;
+
+	if (!len)
+		len = strlen ((char *)name);
+
 	hashno = do_hash (name, len, table -> hash_count);
 
-	if (len) {
-		for (bp = table -> buckets [hashno]; bp; bp = bp -> next) {
-			if (len == bp -> len
-			    && !memcmp (bp -> name, name, len))
-				return bp -> value;
-		}
-	} else {
-		for (bp = table -> buckets [hashno]; bp; bp = bp -> next)
-			if (!strcmp ((char *)bp -> name,
-				     (char *)name))
-				return bp -> value;
+	for (bp = table -> buckets [hashno]; bp; bp = bp -> next) {
+		if (len == bp -> len && !memcmp (bp -> name, name, len))
+			return bp -> value;
 	}
 	return (unsigned char *)0;
 }
-

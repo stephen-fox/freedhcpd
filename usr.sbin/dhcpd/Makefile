@@ -1,70 +1,13 @@
-# Makefile.dist
-#
-# Copyright (c) 1996, 1997, 1998, 1999 The Internet Software Consortium.
-# All rights reserved.
-#
-# Redistribution and use in source and binary forms, with or without
-# modification, are permitted provided that the following conditions
-# are met:
-#
-# 1. Redistributions of source code must retain the above copyright
-#    notice, this list of conditions and the following disclaimer.
-# 2. Redistributions in binary form must reproduce the above copyright
-#    notice, this list of conditions and the following disclaimer in the
-#    documentation and/or other materials provided with the distribution.
-# 3. Neither the name of The Internet Software Consortium nor the names of its
-#    contributors may be used to endorse or promote products derived
-#    from this software without specific prior written permission.
-#
-# THIS SOFTWARE IS PROVIDED BY THE INTERNET SOFTWARE CONSORTIUM AND
-# CONTRIBUTORS ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING,
-# BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
-# FOR A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL
-# THE INTERNET SOFTWARE CONSORTIUM OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
-# INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-# (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-# HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
-# STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
-# OF THE POSSIBILITY OF SUCH DAMAGE.
-#
+# $OpenBSD: Makefile,v 1.1 2004/04/13 23:41:48 henning Exp $
 
-SUBDIRS=	common server client relay statmsg sysconfd dhcpctl
+.include <bsd.own.mk>
 
-all:
-	@for dir in ${SUBDIRS}; do \
-		echo "Making all in $$dir"; \
-		(cd $$dir; $(MAKE) all) || exit 1; \
-	 done
+SRCS=	bootp.c confpars.c db.c dhcp.c dhcpd.c bpf.c packet.c errwarn.c \
+	dispatch.c print.c memory.c options.c inet.c conflex.c parse.c \
+	alloc.c tables.c tree.c hash.c convert.c icmp.c
+PROG=	dhcpd
+MAN=	dhcpd.8 dhcpd.conf.5 dhcpd.leases.5
 
-install:
-	@for dir in ${SUBDIRS}; do \
-		echo "Installing in $$dir"; \
-		(cd $$dir; $(MAKE) install) || exit 1; \
-	 done
+CFLAGS+=-Wall
 
-depend:
-	@for dir in ${SUBDIRS}; do \
-		echo "Making dependencies in $$dir"; \
-		(cd $$dir; $(MAKE) depend) || exit 1; \
-	 done
-
-clean:
-	@for dir in ${SUBDIRS}; do \
-		echo "Cleaning in $$dir"; \
-		(cd $$dir; $(MAKE) clean) || exit 1; \
-	 done
-
-realclean:
-	@for dir in ${SUBDIRS}; do \
-		echo "Really cleaning in $$dir"; \
-		(cd $$dir; $(MAKE) realclean) || exit 1; \
-	 done
-
-distclean:
-	@for dir in ${SUBDIRS}; do \
-		echo "Really, really cleaning in $$dir"; \
-		(cd $$dir; $(MAKE) distclean) || exit 1; \
-	 done
-	@rm -f Makefile
+.include <bsd.prog.mk>
