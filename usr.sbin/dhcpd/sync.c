@@ -393,8 +393,10 @@ sync_lease(struct lease *lease)
 	char pad[DHCP_ALIGNBYTES];
 	u_int16_t leaselen, padlen;
 	int i = 0;
-	HMAC_CTX *ctx;
-	u_int hmac_len;
+	EVP_MAC *mac = NULL;
+	OSSL_PARAM ctx_params[2] = {0};
+	EVP_MAC_CTX *ctx = NULL;
+	size_t hmac_len = 0;
 
 	if (sync_key == NULL)
 		return;
@@ -403,9 +405,15 @@ sync_lease(struct lease *lease)
 	memset(&lv, 0, sizeof(lv));
 	memset(&pad, 0, sizeof(pad));
 
-	if ((ctx = HMAC_CTX_new()) == NULL)
+	mac = EVP_MAC_fetch(NULL, "HMAC", NULL);
+
+	ctx_params[0] = OSSL_PARAM_construct_utf8_string("digest", "SHA1", 0);
+	ctx_params[1] = OSSL_PARAM_construct_end();
+
+	if ((ctx = EVP_MAC_CTX_new(mac)) == NULL)
 		goto bad;
-	if (!HMAC_Init_ex(ctx, sync_key, strlen(sync_key), EVP_sha1(), NULL))
+	if (!EVP_MAC_init(ctx, (const unsigned char *)sync_key, strlen(sync_key),
+	    ctx_params))
 		goto bad;
 
 	leaselen = sizeof(lv);
@@ -418,7 +426,7 @@ sync_lease(struct lease *lease)
 	hdr.sh_length = htons(sizeof(hdr) + sizeof(lv) + padlen + sizeof(end));
 	iov[i].iov_base = &hdr;
 	iov[i].iov_len = sizeof(hdr);
-	if (!HMAC_Update(ctx, iov[i].iov_base, iov[i].iov_len))
+	if (!EVP_MAC_update(ctx, iov[i].iov_base, iov[i].iov_len))
 		goto bad;
 	i++;
 
@@ -437,13 +445,13 @@ sync_lease(struct lease *lease)
 	    piaddr(lease->ip_addr), ntohl(lv.lv_starts), ntohl(lv.lv_ends));
 	iov[i].iov_base = &lv;
 	iov[i].iov_len = sizeof(lv);
-	if (!HMAC_Update(ctx, iov[i].iov_base, iov[i].iov_len))
+	if (!EVP_MAC_update(ctx, iov[i].iov_base, iov[i].iov_len))
 		goto bad;
 	i++;
 
 	iov[i].iov_base = pad;
 	iov[i].iov_len = padlen;
-	if (!HMAC_Update(ctx, iov[i].iov_base, iov[i].iov_len))
+	if (!EVP_MAC_update(ctx, iov[i].iov_base, iov[i].iov_len))
 		goto bad;
 	i++;
 
@@ -452,16 +460,17 @@ sync_lease(struct lease *lease)
 	end.st_length = htons(sizeof(end));
 	iov[i].iov_base = &end;
 	iov[i].iov_len = sizeof(end);
-	if (!HMAC_Update(ctx, iov[i].iov_base, iov[i].iov_len))
+	if (!EVP_MAC_update(ctx, iov[i].iov_base, iov[i].iov_len))
 		goto bad;
 	i++;
 
-	if (!HMAC_Final(ctx, hdr.sh_hmac, &hmac_len))
+	if (!EVP_MAC_final(ctx, hdr.sh_hmac, &hmac_len, sizeof(hdr.sh_hmac)))
 		goto bad;
 
 	/* Send message to the target hosts */
 	sync_send(iov, i);
 
  bad:
-	HMAC_CTX_free(ctx);
+	EVP_MAC_CTX_free(ctx);
+	EVP_MAC_free(mac);
 }
