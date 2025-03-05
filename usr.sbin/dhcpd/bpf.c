@@ -43,6 +43,7 @@
 #include <sys/ioctl.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/uio.h> // fbsd: Required for writev(2).
 
 #include <arpa/inet.h>
 
