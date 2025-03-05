@@ -32,7 +32,7 @@
 
 #include <errno.h>
 #include <netdb.h>
-#include <sha1.h>
+#include <sha.h>
 #include <string.h>
 #include <syslog.h>
 #include <unistd.h>
@@ -140,7 +140,7 @@ sync_init(const char *iface, const char *baddr, u_short port)
 		}
 	}
 
-	sync_key = SHA1File(DHCP_SYNC_KEY, NULL);
+	sync_key = SHA1_File(DHCP_SYNC_KEY, NULL);
 	if (sync_key == NULL) {
 		if (errno != ENOENT) {
 			log_warn("failed to open sync key");
