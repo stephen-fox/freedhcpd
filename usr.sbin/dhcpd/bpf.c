@@ -348,7 +348,7 @@ receive_packet(struct interface_info *interface, unsigned char *buf,
 		/* Decode the IP and UDP headers... */
 		offset = decode_udp_ip_header(interface->rbuf +
 		    interface->rbuf_offset, hdr.bh_caplen, from,
-		    hdr.bh_csumflags);
+		    0); // fbsd: OpenBSD uses hdr.bh_csumflags here.
 
 		/* If the IP or UDP checksum was bad, skip the packet... */
 		if (offset < 0) {
