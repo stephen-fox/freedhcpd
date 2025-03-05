@@ -38,6 +38,8 @@
  * Enterprises, see ``http://www.vix.com''.
  */
 
+#include "dhcpd_freebsd_compat.h"
+
 #define ifr_netmask ifr_addr
 
 #define HAVE_SA_LEN
