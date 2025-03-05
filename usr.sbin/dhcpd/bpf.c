@@ -176,7 +176,7 @@ if_register_receive(struct interface_info *info)
 	struct bpf_version v;
 	struct bpf_program p;
 	int flag = 1, sz, cmplt = 0;
-	int fildrop = BPF_FILDROP_CAPTURE;
+	// int fildrop = BPF_FILDROP_CAPTURE; // fbsd: OpenBSD-specific.
 
 	/* Open a BPF device and hang it on this interface... */
 	info->rfdesc = if_register_bpf(info);
@@ -197,8 +197,9 @@ if_register_receive(struct interface_info *info)
 	if (ioctl(info->rfdesc, BIOCIMMEDIATE, &flag) == -1)
 		fatal("Can't set immediate mode on bpf device");
 
-	if (ioctl(info->rfdesc, BIOCSFILDROP, &fildrop) == -1)
-		fatal("Can't set filter-drop mode on bpf device");
+	// fbsd: BIOCSFILDROP is OpenBSD-specific.
+	// if (ioctl(info->rfdesc, BIOCSFILDROP, &fildrop) == -1)
+	//	fatal("Can't set filter-drop mode on bpf device");
 
 	/* make sure kernel fills in the source ethernet address */
 	if (ioctl(info->rfdesc, BIOCSHDRCMPLT, &cmplt) == -1)
