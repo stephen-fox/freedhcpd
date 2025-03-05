@@ -920,7 +920,7 @@ parse_ip_addr_or_hostname(FILE *cfile, int uniform)
 		if (name)
 			h = gethostbyname(name);
 		if (name && h) {
-			rv = tree_const(h->h_addr_list[0], h->h_length);
+			rv = tree_const((unsigned char *)h->h_addr_list[0], h->h_length);
 			if (!uniform)
 				rv = tree_limit(rv, 4);
 			return rv;
