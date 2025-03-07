@@ -10,3 +10,6 @@
 // - INADDR_BROADCAST
 // - struct sockaddr_in
 #include <netinet/in.h>
+
+// setfib is the equivalent to OpenBSD setrtable.
+#define setrtable(rdomain) setfib(rdomain)
