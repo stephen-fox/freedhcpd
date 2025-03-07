@@ -13,3 +13,14 @@
 
 // setfib is the equivalent to OpenBSD setrtable.
 #define setrtable(rdomain) setfib(rdomain)
+
+// pledge is an OpenBSD thing, this is just a placeholder.
+#ifdef pledge
+#error "pledge already defined"
+#else
+static inline int pledge(const char *promises, const char *execpromises) {
+	(void)promises;
+	(void)execpromises;
+	return 0;
+}
+#endif
