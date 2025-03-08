@@ -60,11 +60,13 @@ pftable_handler(void)
 	    setresuid(pw->pw_uid, pw->pw_uid, pw->pw_uid))
 		fatal("can't drop privileges");
 
+#ifdef __OpenBSD__
 	/* no filesystem visibility */
 	if (unveil("/", "") == -1)
 		fatal("unveil /");
 	if (unveil(NULL, NULL) == -1)
 		fatal("unveil");
+#endif
 
 	setproctitle("pf table handler");
 	l = sizeof(struct pf_cmd);
