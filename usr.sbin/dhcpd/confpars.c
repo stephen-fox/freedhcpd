@@ -57,6 +57,8 @@
 #include "dhctoken.h"
 #include "log.h"
 
+FILE	*db_file_ro;
+
 int	parse_cidr(FILE *, unsigned char *, unsigned char *);
 
 /*
@@ -105,19 +107,9 @@ readconf(void)
 	return !warnings_occurred;
 }
 
-/*
- * lease-file :== lease-declarations EOF
- * lease-statments :== <nil>
- *		   | lease-declaration
- *		   | lease-declarations lease-declaration
- */
 void
-read_leases(void)
+open_leases(void)
 {
-	FILE *cfile;
-	char *val;
-	int token;
-
 	new_parse(path_dhcpd_db);
 
 	/*
@@ -131,23 +123,41 @@ read_leases(void)
 	 * thinking that no leases have been assigned to anybody, which
 	 * could create severe network chaos.
 	 */
-	if ((cfile = fopen(path_dhcpd_db, "r")) == NULL) {
+	if ((db_file_ro = fopen(path_dhcpd_db, "r")) == NULL) {
 		log_warn("Can't open lease database (%s)", path_dhcpd_db);
 		log_warnx("check for failed database rewrite attempt!");
 		log_warnx("Please read the dhcpd.leases manual page if you");
 		fatalx("don't know what to do about this.");
 	}
 
+}
+
+/*
+ * lease-file :== lease-declarations EOF
+ * lease-statments :== <nil>
+ *		   | lease-declaration
+ *		   | lease-declarations lease-declaration
+ */
+void
+read_leases(void)
+{
+	char *val;
+	int token;
+
+	if (!db_file_ro) {
+		fatalx("db_file_ro is NULL");
+	}
+
 	do {
-		token = next_token(&val, cfile);
+		token = next_token(&val, db_file_ro);
 		if (token == EOF)
 			break;
 		if (token != TOK_LEASE) {
 			log_warnx("Corrupt lease file - possible data loss!");
-			skip_to_semi(cfile);
+			skip_to_semi(db_file_ro);
 		} else {
 			struct lease *lease;
-			lease = parse_lease_declaration(cfile);
+			lease = parse_lease_declaration(db_file_ro);
 			if (lease)
 				enter_lease(lease);
 			else
@@ -155,7 +165,8 @@ read_leases(void)
 		}
 
 	} while (1);
-	fclose(cfile);
+	fclose(db_file_ro);
+	db_file_ro = NULL;
 }
 
 /*

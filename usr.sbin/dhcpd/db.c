@@ -190,6 +190,10 @@ commit_leases(void)
 	return (1);
 }
 
+/*
+ * Open the lease database file descriptors. One fd for reading the
+ * initial leases, and the second for writing newly-issued leases.
+ */
 void
 db_startup(void)
 {
@@ -202,6 +206,15 @@ db_startup(void)
 	if ((db_file = fdopen(db_fd, "w")) == NULL)
 		fatalx("Can't fdopen new lease file!");
 
+	open_leases();
+}
+
+/*
+ * Parse the existing leases from the lease database file.
+ */
+void
+db_parse(void)
+{
 	/* Read in the existing lease file... */
 	read_leases();
 	time(&write_time);

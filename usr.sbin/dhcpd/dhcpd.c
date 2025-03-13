@@ -264,6 +264,8 @@ main(int argc, char *argv[])
 			err(1, "pledge");
 	}
 
+	db_parse();
+
 	add_timeout(cur_time + 5, periodic_scan, NULL);
 	dispatch();
 
