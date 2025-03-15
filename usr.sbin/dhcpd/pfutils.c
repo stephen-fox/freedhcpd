@@ -15,6 +15,8 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include "pfutils_freebsd_compat.h"
+
 #include <sys/types.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
@@ -60,13 +62,11 @@ pftable_handler(void)
 	    setresuid(pw->pw_uid, pw->pw_uid, pw->pw_uid))
 		fatal("can't drop privileges");
 
-#ifdef __OpenBSD__
 	/* no filesystem visibility */
 	if (unveil("/", "") == -1)
 		fatal("unveil /");
 	if (unveil(NULL, NULL) == -1)
 		fatal("unveil");
-#endif
 
 	setproctitle("pf table handler");
 	l = sizeof(struct pf_cmd);
