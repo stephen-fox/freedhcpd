@@ -5,7 +5,7 @@ set -eux
 script_path="$(realpath "${0}")"
 script_dir="${script_path%/*}"
 repo_dir="${script_dir%/*}"
-src_dir="${repo_dir}/src"
+src_dir="${repo_dir}/usr.sbin/dhcpd"
 test_dir="${repo_dir}/testing"
 
 . "${script_dir}/common.sh"
