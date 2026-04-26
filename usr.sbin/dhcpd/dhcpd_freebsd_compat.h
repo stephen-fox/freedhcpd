@@ -11,9 +11,6 @@
 // - struct sockaddr_in
 #include <netinet/in.h>
 
-// setfib is the equivalent to OpenBSD setrtable.
-#define setrtable(rdomain) setfib(rdomain)
-
 // pledge is an OpenBSD thing, this is just a placeholder.
 #ifdef pledge
 #error "pledge already defined"
