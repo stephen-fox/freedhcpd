@@ -28,7 +28,8 @@ lease_file="$(mktemp -t dev-dhcpd-${if_basename})"
 
 trap "rm ${lease_file}" SIGINT SIGQUIT SIGTERM SIGHUP
 
-"${src_dir}/dhcpd" \
+setfib 0 \
+  "${src_dir}/dhcpd" \
   -d \
   -v \
   -c "${test_dir}/server.conf" \

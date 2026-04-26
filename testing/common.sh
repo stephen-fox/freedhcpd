@@ -7,6 +7,8 @@ br0_if="${group}_br0"
 a_suffix="bm"
 b_suffix="cs"
 
+fib=0
+
 die() {
   local status="${1}"
   shift
@@ -38,8 +40,8 @@ create_epair() {
   ifconfig "${tmp}a" name "${a}"
   ifconfig "${tmp}b" name "${b}"
 
-  ifconfig "${a}" group "${group}" up
-  ifconfig "${b}" group "${group}" up
+  ifconfig "${a}" fib ${fib} group "${group}" up
+  ifconfig "${b}" fib ${fib} group "${group}" up
 
   return 0
 }
@@ -47,7 +49,7 @@ create_epair() {
 create_bridge() {
   local if_name="${1}"
 
-  local tmp="$(ifconfig bridge create)"
+  local tmp="$(ifconfig bridge create fib ${fib})"
 
   ifconfig "${tmp}" name "${if_name}"
 
