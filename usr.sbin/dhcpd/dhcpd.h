@@ -38,7 +38,9 @@
  * Enterprises, see ``http://www.vix.com''.
  */
 
-#include "dhcpd_freebsd_compat.h"
+#include "os_compat.h"
+
+#include <netinet/in.h> // FreeBSD: Required for INADDR_BROADCAST, sockaddr_in
 
 #define ifr_netmask ifr_addr
 

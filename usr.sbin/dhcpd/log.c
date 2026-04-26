@@ -16,7 +16,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include "log_freebsd_compat.h"
+#include "os_compat.h"
 
 #include <stdio.h>
 #include <stdlib.h>

@@ -15,7 +15,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include "pfutils_freebsd_compat.h"
+#include "os_compat.h"
 
 #include <sys/types.h>
 #include <sys/ioctl.h>

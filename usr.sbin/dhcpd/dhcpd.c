@@ -62,6 +62,7 @@
 #include "log.h"
 #include "sync.h"
 
+#include "os_compat.h"
 
 __dead void usage(void);
 

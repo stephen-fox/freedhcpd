@@ -67,6 +67,8 @@
 #include "log.h"
 #include "sync.h"
 
+#include "os_compat.h"
+
 extern int rdomain;
 
 struct interface_info *interfaces;

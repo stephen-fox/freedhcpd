@@ -40,7 +40,7 @@
  * Enterprises, see ``http://www.vix.com''.
  */
 
-#include "packet_freebsd_compat.h"
+#include "os_compat.h"
 
 #include <sys/types.h>
 #include <sys/socket.h>
