@@ -140,10 +140,9 @@ discover_interfaces(void)
 		/* If we have the capability, extract link information
 		   and record it in a linked list. */
 		if (ifa->ifa_addr->sa_family == AF_LINK) {
-			struct if_data *ifi = ifa->ifa_data;
 			struct sockaddr_dl *sdl;
 
-			if (rdomain != ifi->ifi_rdomain)
+			if (rdomain != get_iface_fib(ifa->ifa_name))
 				continue;
 
 			sdl = (struct sockaddr_dl *)ifa->ifa_addr;
