@@ -8,12 +8,20 @@ SRCS=	bootp.c confpars.c db.c dhcp.c dhcpd.c bpf.c packet.c log.c \
 	udpsock.c
 OS!=    uname -s
 .if ${OS} == "FreeBSD"
-SRCS+=os_compat_freebsd.c
+SRCS+=os_compat_freebsd.c pfutils_compat_freebsd.c
 .endif
 PROG=	dhcpd
 MAN=	dhcpd.8 dhcpd.conf.5 dhcpd.leases.5 dhcp-options.5
 
-LDADD+=-lcrypto -lmd
+LDADD+=-lcrypto
+.if ${OS} == "FreeBSD"
+LDADD+=-lmd
+OSREL!=uname -r | cut -d . -f 1
+.if ${OSREL} >= 15
+# FreeBSD 15+ needs nvlist library for pfutils code.
+LDADD+=-lnv
+.endif
+.endif
 CFLAGS+=-Wall
 
 .include <bsd.prog.mk>

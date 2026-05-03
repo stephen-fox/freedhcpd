@@ -15,8 +15,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include "os_compat.h"
-
 #include <sys/types.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
@@ -39,6 +37,9 @@
 #include "tree.h"
 #include "dhcpd.h"
 #include "log.h"
+
+#include "os_compat.h"
+#include "pfutils_compat.h"
 
 extern struct passwd *pw;
 extern int pfpipe[2];
@@ -163,38 +164,6 @@ pf_change_table(int fd, int op, struct in_addr ip, char *table)
 	    errno != ESRCH) {
 		log_warn( "DIOCR%sADDRS on table %s", op ? "ADD" : "DEL",
 		    table);
-	}
-}
-
-void
-pf_kill_state(int fd, struct in_addr ip)
-{
-	struct pfioc_state_kill	psk;
-	struct pf_addr target;
-
-	memset(&psk, 0, sizeof(psk));
-	memset(&target, 0, sizeof(target));
-
-	memcpy(&target.v4, &ip.s_addr, 4);
-	psk.psk_af = AF_INET;
-
-	/* Kill all states from target */
-	memcpy(&psk.psk_src.addr.v.a.addr, &target,
-	    sizeof(psk.psk_src.addr.v.a.addr));
-	memset(&psk.psk_src.addr.v.a.mask, 0xff,
-	    sizeof(psk.psk_src.addr.v.a.mask));
-	if (ioctl(fd, DIOCKILLSTATES, &psk) == -1) {
-		log_warn("DIOCKILLSTATES failed");
-	}
-
-	/* Kill all states to target */
-	memset(&psk.psk_src, 0, sizeof(psk.psk_src));
-	memcpy(&psk.psk_dst.addr.v.a.addr, &target,
-	    sizeof(psk.psk_dst.addr.v.a.addr));
-	memset(&psk.psk_dst.addr.v.a.mask, 0xff,
-	    sizeof(psk.psk_dst.addr.v.a.mask));
-	if (ioctl(fd, DIOCKILLSTATES, &psk) == -1) {
-		log_warn("DIOCKILLSTATES failed");
 	}
 }
 
