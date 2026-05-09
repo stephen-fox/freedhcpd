@@ -38,6 +38,7 @@
  * Enterprises, see ``http://www.vix.com''.
  */
 
+#include <sys/capsicum.h> // fbsd: Required for capsicum.
 #include <sys/types.h>
 #include <sys/socket.h>
 
@@ -68,6 +69,7 @@ icmp_startup(int routep, void (*handler)(struct iaddr, u_int8_t *, int))
 {
 	struct protoent *proto;
 	int protocol = 1, state;
+	cap_rights_t rights;
 
 	/* Only initialize icmp once. */
 	if (icmp_protocol_initialized)
@@ -87,6 +89,11 @@ icmp_startup(int routep, void (*handler)(struct iaddr, u_int8_t *, int))
 	if (setsockopt(icmp_protocol_fd, SOL_SOCKET, SO_DONTROUTE,
 	    &state, sizeof(state)) == -1)
 		fatal("Unable to disable SO_DONTROUTE on ICMP socket");
+
+	/* Set icmp rights here to avoid setsockopt. */
+	cap_rights_init(&rights, CAP_READ, CAP_WRITE, CAP_CONNECT, CAP_EVENT);
+	if (cap_rights_limit(icmp_protocol_fd, &rights) < 0)
+		fatal("unable to cap_rights_limit icmp fd");
 
 	add_protocol("icmp", icmp_protocol_fd, icmp_echoreply,
 	    (void *)handler);

@@ -38,6 +38,7 @@
  * Enterprises, see ``http://www.vix.com''.
  */
 
+#include <sys/capsicum.h> // fbsd: Required for capsicum(4).
 #include <sys/types.h>
 #include <sys/socket.h>
 
@@ -73,6 +74,7 @@ readconf(void)
 	char *val;
 	int token;
 	int declaration = 0;
+	cap_rights_t rights;
 
 	new_parse(path_dhcpd_conf);
 
@@ -92,6 +94,10 @@ readconf(void)
 	if ((cfile = fopen(path_dhcpd_conf, "r")) == NULL)
 		fatal("Can't open %s", path_dhcpd_conf);
 
+	cap_rights_init(&rights, CAP_PREAD);
+	if (cap_rights_limit(fileno(cfile), &rights) < 0)
+		fatal("Failed to cap_rights_limit config file fd");
+
 	do {
 		token = peek_token(&val, cfile);
 		if (token == EOF)
@@ -110,6 +116,7 @@ readconf(void)
 void
 open_leases(void)
 {
+	cap_rights_t rights;
 	new_parse(path_dhcpd_db);
 
 	/*
@@ -130,6 +137,9 @@ open_leases(void)
 		fatalx("don't know what to do about this.");
 	}
 
+	cap_rights_init(&rights, CAP_PREAD);
+	if (cap_rights_limit(fileno(db_file_ro), &rights) < 0)
+		fatal("failed to cap_rights_limit lease file");
 }
 
 /*

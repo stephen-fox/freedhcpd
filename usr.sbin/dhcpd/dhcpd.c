@@ -39,6 +39,7 @@
  * Enterprises, see ``http://www.vix.com''.
  */
 
+#include <sys/capsicum.h> // fbsd: Required for capsicum(4).
 #include <sys/types.h>
 #include <sys/socket.h>
 
@@ -262,6 +263,10 @@ main(int argc, char *argv[])
 		if (pledge("stdio inet sendfd", NULL) == -1)
 			err(1, "pledge");
 	}
+
+	/* Enter capability mode for main process ("man 2 cap_enter"). */
+	if (cap_enter())
+		err(1, "cap_enter failed");
 
 	db_parse();
 

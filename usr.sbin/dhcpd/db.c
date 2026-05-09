@@ -42,6 +42,7 @@
  * Enterprises, see ``http://www.vix.com''.
  */
 
+#include <sys/capsicum.h> // fbsd: Required for capsicum(4).
 #include <sys/types.h>
 #include <sys/socket.h>
 
@@ -198,6 +199,7 @@ void
 db_startup(void)
 {
 	int db_fd;
+	cap_rights_t rights;
 
 	/* open lease file. once we dropped privs it has to stay open */
 	db_fd = open(path_dhcpd_db, O_WRONLY|O_CREAT, 0640);
@@ -205,6 +207,10 @@ db_startup(void)
 		fatal("Can't create new lease file");
 	if ((db_file = fdopen(db_fd, "w")) == NULL)
 		fatalx("Can't fdopen new lease file!");
+
+	cap_rights_init(&rights, CAP_PWRITE, CAP_FTRUNCATE, CAP_FSYNC);
+	if (cap_rights_limit(fileno(db_file), &rights) < 0)
+		fatal("Can't cap_rights_limit on db fd");
 
 	open_leases();
 }

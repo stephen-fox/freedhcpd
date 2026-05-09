@@ -17,6 +17,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <sys/capsicum.h> // fbsd: Required for capsicum(4).
 #include <sys/types.h>
 #include <sys/ioctl.h>
 #include <sys/queue.h>
@@ -123,6 +124,7 @@ sync_init(const char *iface, const char *baddr, u_short port)
 	char ifnam[IFNAMSIZ], *ttlstr;
 	const char *errstr;
 	struct in_addr ina;
+	cap_rights_t rights;
 
 	if (iface != NULL)
 		sendmcast++;
@@ -215,6 +217,13 @@ sync_init(const char *iface, const char *baddr, u_short port)
 		log_warn("failed to set multicast ttl to %u", ttl);
 		setsockopt(syncfd, IPPROTO_IP,
 		    IP_DROP_MEMBERSHIP, &mreq, sizeof(mreq));
+		goto fail;
+	}
+
+	/* We set syncfd rights here to avoid dealing with CAP_IOCTL. */
+	cap_rights_init(&rights, CAP_PREAD, CAP_WRITE, CAP_EVENT);
+	if (cap_rights_limit(syncfd, &rights) < 0) {
+		log_warn("failed to cap_rights_limit syncfd");
 		goto fail;
 	}
 
@@ -371,6 +380,7 @@ sync_send(struct iovec *iov, int iovlen)
 			log_info("sending multicast sync message\n");
 		msg.msg_name = &sync_out;
 		msg.msg_namelen = sizeof(sync_out);
+		// TODO: Fails in capability mode on FreeBSD.
 		if (sendmsg(syncfd, &msg, 0) == -1)
 			log_warn("sending multicast sync message failed");
 	}

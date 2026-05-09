@@ -40,10 +40,11 @@
  * Enterprises, see ``http://www.vix.com''.
  */
 
+#include <sys/capsicum.h> // fbsd: Required for capsicum(4).
 #include <sys/ioctl.h>
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <sys/uio.h> // fbsd: Required for writev(2).
+#include <sys/uio.h>      // fbsd: Required for writev(2).
 
 #include <arpa/inet.h>
 
@@ -177,6 +178,7 @@ if_register_receive(struct interface_info *info)
 	struct bpf_program p;
 	int flag = 1, sz, cmplt = 0;
 	// int fildrop = BPF_FILDROP_CAPTURE; // fbsd: OpenBSD-specific.
+	cap_rights_t rights;
 
 	/* Open a BPF device and hang it on this interface... */
 	info->rfdesc = if_register_bpf(info);
@@ -233,6 +235,15 @@ if_register_receive(struct interface_info *info)
 	/* make sure these settings cannot be changed after dropping privs */
 	if (ioctl(info->rfdesc, BIOCLOCK) == -1)
 		fatal("Failed to lock bpf descriptor");
+
+	/*
+	 * Set bpf rights here to sidestep allowing IOCTLs.
+	 * All info->rfdesc ioctl operations occur prior to
+	 * this line.
+	 */
+	cap_rights_init(&rights, CAP_PREAD, CAP_PWRITE, CAP_EVENT);
+	if (cap_rights_limit(info->rfdesc, &rights) < 0)
+		fatal("Can't cap_rights_limit bpf device");
 }
 
 ssize_t
