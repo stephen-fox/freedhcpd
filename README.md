@@ -1,19 +1,20 @@
 # freedhcpd
 
-## Updating upstream branch
+freedhcpd is a port of [OpenBSD's IPv4 DHCP server (dhcpd)][openbsd-dhcpd]
+for FreeBSD with [capsicum(4)][capsicum-manual] support and some other small
+changes. The goal of freedhcpd is to provide a simple, security-concious DHCP
+server for FreeBSD with the smallest number of changes required to make
+it work properly on FreeBSD. This repository also retains the revision
+history of the ISC dhcpd code, on which OpenBSD's dhcpd is based.
 
-Note: Requires the git-filter-repo package.
+[openbsd-dhcpd]: https://codeberg.org/OpenBSD/src/src/branch/master/usr.sbin/dhcpd
+[capsicum-manual]: https://man.freebsd.org/cgi/man.cgi?query=capsicum
 
-```sh
-git clone https://github.com/openbsd/src openbsd-src
-cp -r openbsd-src openbsd-dhcpd
+## Documentation
 
-cd openbsd-dhcpd
-git filter-repo --path usr.sbin/dhcpd --path-rename usr.sbin/dhcpd:src
-
-cd ../freedhcpd
-git remote add tmp ../openbsd-dhcpd
-git checkout upstream
-git pull tmp master
-git checkout -
-```
+- [Security model](docs/security-model/README.md) - Overview of OpenBSD's
+  dhcpd security model and freedhcpd's changes
+- [Development documentation](docs/development/README.md) - Developer
+  resources, including building and testing instructions
+- [History](docs/history/README.md) - Notes about preserving the revision
+  history of ISC dhcpd and OpenBSD dhcpd
