@@ -1,9 +1,9 @@
 # freedhcpd
 
-freedhcpd is a port of [OpenBSD's IPv4 DHCP server (dhcpd)][openbsd-dhcpd]
+freedhcpd is a port of OpenBSD's IPv4 DHCP server ([dhcpd][openbsd-dhcpd])
 for FreeBSD with [capsicum(4)][capsicum-manual] support and some other small
-changes. The goal of freedhcpd is to provide a simple, security-concious DHCP
-server for FreeBSD with the smallest number of changes required to make
+changes. The goal of freedhcpd is to provide a simple, security-conscious
+DHCP server for FreeBSD with the smallest number of changes required to make
 it work properly on FreeBSD. This repository also retains the revision
 history of the ISC dhcpd code, on which OpenBSD's dhcpd is based.
 
