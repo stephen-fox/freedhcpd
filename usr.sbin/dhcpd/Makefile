@@ -2,6 +2,11 @@
 
 .include <bsd.own.mk>
 
+PREFIX?= /usr/local
+BINDIR=  ${PREFIX}/sbin
+LIBDIR=  ${PREFIX}/lib
+MANDIR=  ${PREFIX}/share/man/man
+
 SRCS=	bootp.c confpars.c db.c dhcp.c dhcpd.c bpf.c packet.c log.c \
 	dispatch.c print.c memory.c options.c inet.c conflex.c parse.c \
 	alloc.c tables.c tree.c hash.c convert.c icmp.c pfutils.c sync.c \
