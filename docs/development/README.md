@@ -2,6 +2,19 @@
 
 This document covers development topics for working on the project.
 
+## Building
+
+```sh
+# Delete build artifacts:
+(cd usr.sbin/dhcpd/ && make clean)
+
+# Build only:
+(cd usr.sbin/dhcpd/ && make)
+
+# Install (must be run as root):
+(cd usr.sbin/dhcpd/ && make install)
+```
+
 ## Virtual test network automation
 
 A virtual network can be created using the shell scripts in the `testing`
