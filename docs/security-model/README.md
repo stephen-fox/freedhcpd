@@ -19,7 +19,7 @@ blast radius of security bugs:
 - Sets the process' file system root to an empty directory using `chroot(2)`
 - Calls [pledge(2)][pledge-manual] on startup to limit the system calls
   that the process can make
-- Calls [unveil2(2)][unveil-manual] when pf support is enabled for the
+- Calls [unveil(2)][unveil-manual] when pf support is enabled for the
   pfutils helper process to disable file system access
 
 FreeBSD has no equivalent to `pledge` or `unveil`, but most of the other
