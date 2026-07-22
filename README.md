@@ -1,19 +1,21 @@
 # freedhcpd
 
-freedhcpd is a port of OpenBSD's IPv4 DHCP server ([dhcpd][openbsd-dhcpd])
-for FreeBSD with [capsicum(4)][capsicum-manual] sandbox support and some
-other small changes.
+freedhcpd is a port of OpenBSD's IPv4 DHCP server, [dhcpd][openbsd-dhcpd],
+to FreeBSD with [capsicum(4)][capsicum-manual] sandbox support.
 
 The goal of freedhcpd is to provide a simple, security-conscious DHCP server
-for FreeBSD with the smallest number of changes required to make it work
-properly on FreeBSD.
+for FreeBSD with the smallest number of compatibility changes required to
+make it work properly on FreeBSD.
 
-OpenBSD's dhcpd is a fork of the ISC dhcpd that was started in 2004. This
-repository retains the revision history of both the OpenBSD code and the
-original ISC dhcpd code going back to 1995.
+OpenBSD's dhcpd started in 2004 as a fork of the dhcpd server from the
+[ISC DHCP project][isc-dhcp]. Interestingly, OpenBSD forked the ISC code
+from a revision in 1999 instead of the early 2000s. The ISC DHCP project
+itself started in 1995. The freedhcpd repository retains the revision
+history of the original ISC code and the OpenBSD code.
 
 [openbsd-dhcpd]: https://codeberg.org/OpenBSD/src/src/branch/master/usr.sbin/dhcpd
 [capsicum-manual]: https://man.freebsd.org/cgi/man.cgi?query=capsicum
+[isc-dhcp]: https://github.com/isc-projects/dhcp
 
 ## Project status
 
