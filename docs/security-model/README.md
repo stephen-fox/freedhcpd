@@ -15,15 +15,15 @@ blast radius of security bugs:
 - Opens file descriptors and sockets as root and then switches to
   a non-root user before processing input data from them
 - Restricts the raw socket's functionality from being modified using
-  the BPF BIOCLOCK IOCTL
+  the BPF BIOCLOCK ioctl
 - Sets the process' file system root to an empty directory using `chroot(2)`
 - Calls [pledge(2)][pledge-manual] on startup to limit the system calls
   that the process can make
 - Calls [unveil(2)][unveil-manual] when pf support is enabled for the
   pfutils helper process to disable file system access
 
-FreeBSD has no equivalent to `pledge` or `unveil`, but most of the other
-mechanisms can be reused without modification.
+With the exception of the OpenBSD-specific `pledge` and `unveil` functions,
+the above mechanisms can be reused without modification on FreeBSD.
 
 [pledge-manual]: https://man.openbsd.org/pledge
 [unveil-manual]: https://man.openbsd.org/unveil
@@ -40,6 +40,8 @@ feedback on it.
 FreeBSD does not have direct equivalents to `pledge` and `unveil`. Instead,
 FreeBSD offers two sandboxing mechanisms: jails and capsicum.
 
+### Jails
+
 Jails can be thought of as "containers". They are usually instantiated by
 creating a copy of the FreeBSD userland in a directory and defining a jail
 configuration file that starts the init system from that userland. All child
@@ -48,6 +50,8 @@ result, regular users and sysadmins can sandbox programs without modifying
 their source code. Programs can also invoke the jail APIs directly via
 system calls and libc. For our purposes though, jails are a big hammer
 compared to capsicum.
+
+### capsicum
 
 capsicum cannot be applied to a program without modifying the program's
 source code. However, capsicum provides much more granular control over
@@ -70,8 +74,8 @@ what is considered a logical namespace is a bit nebulous, so simply
 opening a bunch of file descriptors and calling cap_enter may prove
 to be too restrictive by default.
 
-Granular control of what a capability can and cannot do is controlled
-using [capability rights][rights-manual]. Capability rights bare some
+Granular control of what a capability can and cannot do is managed
+using [capability rights][rights-manual]. Capability rights bear some
 similarity to pledge(2) by restricting system calls and functionality,
 but for a single resource. 
 
